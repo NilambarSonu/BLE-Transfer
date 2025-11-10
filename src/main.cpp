@@ -125,8 +125,28 @@ struct SystemStatus {
 SensorData soilData;
 SystemStatus systemStatus;
 // ============================================================================
+// ANIMATION DATA
+// ============================================================================
+#define FRAME_SNOW_DELAY (42)
+#define FRAME_SNOW_WIDTH (64)
+#define FRAME_SNOW_HEIGHT (64)
+#define FRAME_SNOW_COUNT (sizeof(frames_snow) / sizeof(frames_snow[0]))
+const byte PROGMEM frames_snow[][512] = {
+  {0,0,0,0,0,4,0,0,0,0,0,0,0,14,0,0,0,0,0,0,0,14,0,0,0,0,0,0,0,63,128,0,0,0,0,0,0,63,128,0,0,0,0,0,1,158,50,0,0,0,0,0,15,142,63,0,0,0,24,0,15,142,62,0,0,0,24,0,7,206,124,0,0,0,24,0,7,255,254,0,0,0,24,0,6,255,236,0,0,8,24,56,0,63,128,0,0,30,28,120,0,63,128,0,0,15,157,240,6,127,238,0,0,7,255,224,7,254,252,0,0,1,255,128,7,206,126,0,0,0,126,0,15,134,63,0,0,0,127,0,15,134,63,0,0,1,255,192,1,159,144,0,0,7,223,240,0,31,128,0,0,15,156,248,0,31,128,0,0,14,28,56,0,6,0,0,0,8,28,0,0,6,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,96,0,0,0,0,0,0,0,96,0,0,0,0,0,0,0,112,0,0,0,0,0,0,0,113,0,0,0,0,0,0,14,119,128,0,0,0,0,0,15,255,0,0,0,0,0,0,7,254,0,0,0,0,0,0,1,248,0,0,0,0,0,0,3,254,0,0,0,0,0,0,7,255,0,0,0,0,0,0,15,119,128,0,0,0,0,0,12,113,0,0,0,0,3,0,0,112,0,0,0,0,3,176,0,112,0,0,0,0,3,240,0,112,0,0,0,0,3,240,0,0,0,0,0,0,7,192,0,0,0,0,0,0,7,224,0,0,1,192,0,0,0,224,0,0,1,192,0,0,0,64,0,0,1,192,0,96,0,0,0,0,25,206,0,112,0,0,0,0,63,254,0,115,128,0,0,0,31,248,0,63,128,0,0,0,7,240,0,127,0,0,0,0,7,240,1,252,0,0,0,0,15,252,1,252,0,0,0,0,63,254,1,140,0,0,0,0,57,206,0,14,0,0,0,0,1,192,0,12,0,0,0,0,1,192,0,0,0,0,0,0,1,192,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+};
+// --- Animation 2: Leaf ---
+#define FRAME_LEAF_DELAY (42)
+#define FRAME_LEAF_WIDTH (64)
+#define FRAME_LEAF_HEIGHT (64)
+#define FRAME_LEAF_COUNT (sizeof(frames_leaf) / sizeof(frames_leaf[0]))
+const byte PROGMEM frames_leaf[][512] = {
+  {0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0,248,0,0,0,0,0,0,1,248,0,0,0,0,0,0,7,220,0,0,0,0,0,0,63,156,0,0,0,0,0,1,254,12,0,0,0,0,0,31,248,14,0,0,0,0,1,255,192,14,0,0,0,0,15,248,0,6,0,0,0,0,127,128,0,7,0,0,0,0,252,0,0,7,0,0,0,3,224,0,0,3,0,0,0,15,128,0,0,3,128,0,0,30,0,0,0,3,128,0,0,60,0,0,0,1,128,0,0,240,0,0,0,1,128,0,0,224,0,0,0,1,192,0,1,192,0,0,6,1,192,0,3,128,0,0,7,1,192,0,7,0,0,0,14,0,192,0,14,0,0,0,14,0,192,0,14,0,0,0,28,0,192,0,28,0,0,0,28,0,224,0,28,0,0,0,56,0,224,0,56,0,0,0,56,0,224,0,56,0,0,0,112,0,224,0,48,0,0,0,112,0,224,0,48,0,0,0,224,0,224,0,112,0,0,0,224,0,224,0,112,0,0,1,192,0,224,0,112,0,0,3,128,0,224,0,112,0,0,3,128,0,224,0,112,0,0,7,0,0,224,0,48,0,0,15,0,0,224,0,56,0,0,14,0,0,192,0,56,0,0,28,0,0,192,0,28,0,0,56,0,1,192,0,28,0,0,120,0,1,192,0,14,0,0,240,0,1,192,0,7,0,0,224,0,1,128,0,7,128,1,192,0,3,128,0,3,192,3,128,0,3,128,0,1,224,7,0,0,7,0,0,0,248,14,0,0,7,0,0,0,126,30,0,0,14,0,0,0,31,252,0,0,14,0,0,0,7,248,0,0,28,0,0,0,1,240,0,0,60,0,0,0,3,240,0,0,120,0,0,0,7,184,0,0,240,0,0,0,15,24,0,1,224,0,0,0,62,28,0,3,192,0,0,0,252,15,0,15,128,0,0,3,240,7,128,31,0,0,0,31,224,3,255,252,0,0,15,255,128,0,255,240,0,0,7,252,0,0,31,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+  {0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0,248,0,0,0,0,0,0,1,248,0,0,0,0,0,0,7,220,0,0,0,0,0,0,63,156,0,0,0,0,0,1,254,12,0,0,0,0,0,31,248,14,0,0,0,0,1,255,192,14,0,0,0,0,15,248,0,6,0,0,0,0,127,128,0,7,0,0,0,0,252,0,0,7,0,0,0,3,224,0,0,3,0,0,0,15,128,0,0,3,128,0,0,30,0,0,0,3,128,0,0,60,0,0,0,1,128,0,0,240,0,0,0,1,128,0,0,224,0,0,0,1,192,0,1,192,0,0,6,1,192,0,3,128,0,0,7,1,192,0,7,0,0,0,14,0,192,0,14,0,0,0,14,0,192,0,14,0,0,0,28,0,192,0,28,0,0,0,28,0,224,0,28,0,0,0,56,0,224,0,56,0,0,0,56,0,224,0,56,0,0,0,112,0,224,0,48,0,0,0,112,0,224,0,48,0,0,0,224,0,224,0,112,0,0,0,224,0,224,0,112,0,0,1,192,0,224,0,112,0,0,3,128,0,224,0,112,0,0,3,128,0,224,0,112,0,0,7,0,0,224,0,48,0,0,15,0,0,224,0,56,0,0,14,0,0,192,0,56,0,0,28,0,0,192,0,28,0,0,56,0,1,192,0,28,0,0,120,0,1,192,0,14,0,0,240,0,1,192,0,7,0,0,224,0,1,128,0,7,128,1,192,0,3,128,0,3,192,3,128,0,3,128,0,1,224,7,0,0,7,0,0,0,248,14,0,0,7,0,0,0,126,30,0,0,14,0,0,0,31,252,0,0,14,0,0,0,7,248,0,0,28,0,0,0,1,240,0,0,60,0,0,0,3,240,0,0,120,0,0,0,7,184,0,0,240,0,0,0,15,24,0,1,224,0,0,0,62,28,0,3,192,0,0,0,252,15,0,15,128,0,0,3,240,7,128,31,0,0,0,31,224,3,255,252,0,0,15,255,128,0,255,240,0,0,7,252,0,0,31,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+};
+// ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
+void playIntroAnimation();
 void startDynamicFileTransfer();
 void formatSDCard();
 String generateJSONData();
@@ -294,6 +314,32 @@ void changeState(DisplayState newState) {
   stateStartTime = millis();
   countdownStartTime = millis();
   updateDisplayState();
+}
+// ============================================================================
+// ANIMATION FUNCTION
+// ============================================================================
+void playIntroAnimation() {
+  if(!systemStatus.oledOK) return; // Don't play if OLED failed
+  Serial.println("▶️  Playing intro animation 1 (Snow)...");
+  // Loop through all frames once
+  for (int frame = 0; frame < FRAME_SNOW_COUNT; frame++) {
+    display.clearDisplay();
+    
+    // The animation is 64x64, screen is 128x64. Center it at x=32.
+    display.drawBitmap(32, 0, frames_snow[frame], FRAME_SNOW_WIDTH, FRAME_SNOW_HEIGHT, SSD1306_WHITE);
+    
+    display.display();
+    delay(FRAME_SNOW_DELAY);
+  }
+  Serial.println("▶️  Playing intro animation 2 (Leaf)...");
+  // Loop through all frames of the second animation (leaf)
+  for (int frame = 0; frame < FRAME_LEAF_COUNT; frame++) {
+    display.clearDisplay();
+    // Center the 64x64 animation on the 128x64 screen
+    display.drawBitmap(32, 0, frames_leaf[frame], FRAME_LEAF_WIDTH, FRAME_LEAF_HEIGHT, SSD1306_WHITE);
+    display.display();
+    delay(FRAME_LEAF_DELAY);
+  }
 }
 // ============================================================================
 // SD CARD FUNCTIONS
@@ -565,7 +611,6 @@ class MyServerCallbacks : public BLEServerCallbacks {
     }
   }
 };
-
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* pCharacteristic) {
     std::string value = pCharacteristic->getValue();
@@ -601,21 +646,16 @@ void sendFile(String filePath) {
     Serial.println("❌ Cannot open file: " + filePath);
     return;
   }
-
   size_t fileSize = file.size();
   size_t bytesSent = 0;
   String fileName = file.name();
-
   Serial.println("📤 Transferring: " + fileName + " (" + String(fileSize) + " bytes)");
-
   String fileHeader = "FILE_START:" + fileName + "|SIZE:" + String(fileSize);
   pFileTransferCharacteristic->setValue(fileHeader.c_str());
   pFileTransferCharacteristic->notify();
   delay(120);
-
   const size_t CHUNK_SIZE = 128;
   uint8_t buffer[CHUNK_SIZE];
-
   while (file.available() && deviceConnected && transferInProgress) {
     size_t bytesRead = file.read(buffer, CHUNK_SIZE);
     if (bytesRead > 0) {
@@ -631,7 +671,6 @@ void sendFile(String filePath) {
     }
     delay(5);
   }
-
   if (deviceConnected && transferInProgress) {
     String fileEnd = "FILE_END:" + fileName;
     pFileTransferCharacteristic->setValue(fileEnd.c_str());
@@ -686,7 +725,6 @@ void startDynamicFileTransfer() {
     }
     root.close();
   }
-
   if (deviceConnected && transferInProgress) {
     String completeMsg = "TRANSFER_COMPLETE|All " + String(totalFiles) + " files transferred!";
     pFileTransferCharacteristic->setValue(completeMsg.c_str());
@@ -694,10 +732,7 @@ void startDynamicFileTransfer() {
     Serial.println("🎉 ALL FILES TRANSFERRED SUCCESSFULLY!");
     beep(300);
   }
-
   transferInProgress = false;
-  
-  // RESTORE NORMAL OPERATION - Return to previous state or default to PLACE_SENSOR
   if (deviceConnected) {
     resetToNormalOperation();
   }
@@ -750,23 +785,17 @@ void resetToNormalOperation() {
   if (transferInProgress) {
     transferInProgress = false;
   }
-  
   // Return to normal operation - default to PLACE_SENSOR state
   changeState(STATE_PLACE_SENSOR);
   Serial.println("🔄 System reset to normal operation");
 }
-
 void initializeBLE() {
   Serial.println("📡 Initializing BLE...");
-
   BLEDevice::init("AGNI-SOIL-SENSOR");
   BLEDevice::setPower(ESP_PWR_LVL_P9);
-
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
-
   BLEService *pService = pServer->createService(SERVICE_UUID);
-
   pFileTransferCharacteristic = pService->createCharacteristic(
     CHARACTERISTIC_UUID_TRANSFER,
     BLECharacteristic::PROPERTY_NOTIFY
@@ -794,7 +823,6 @@ void initializeBLE() {
   Serial.println("✅ BLE initialized successfully!");
   Serial.println("📡 Advertising as: AGNI-SOIL-SENSOR\n");
 }
-
 // ============================================================================
 // SYSTEM STATUS DISPLAY
 // ============================================================================
@@ -859,7 +887,10 @@ void setup() {
   beep(100);
   
   Serial.println("🔧 Initializing components...\n");
-  
+  if (systemStatus.oledOK) {
+    Serial.println("▶️  Playing intro animation...");
+    playIntroAnimation();
+  }
   // Start with initial display state
   changeState(STATE_INITIAL);
   
@@ -963,22 +994,16 @@ void loop() {
     }
     lastSoilRead = millis();
   }
-  
-  // Update display state every 500ms for smooth countdown
   if(millis() - lastOLEDUpdate >= 500) {
     updateDisplayState();
     lastOLEDUpdate = millis();
   }
-  
-  // Display system status every 10 seconds (but less frequently during transfer)
   if(millis() - lastStatusDisplay >= 10000) {
     if (!transferInProgress || (millis() - lastStatusDisplay >= 30000)) {
       printSystemStatus();
       lastStatusDisplay = millis();
     }
   }
-  
-  // Handle BLE auto-transfer
   autoStartTransfer();
   
   delay(10);
