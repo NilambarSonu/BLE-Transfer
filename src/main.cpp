@@ -10,11 +10,12 @@
 #include <BLE2902.h>
 #include <ArduinoJson.h>
 #include <esp_task_wdt.h>
+#include<time.h>
 
 // ============================================================================
 // CONFIGURABLE SETTINGS
 // ============================================================================
-#define DATA_LOG_INTERVAL 30000  // Change this value as needed (in milliseconds)
+#define DATA_LOG_INTERVAL 45000  // Change this value as needed (in milliseconds)
 #define WATCHDOG_TIMEOUT 30      // Watchdog timeout in seconds
 #define JSON_DOC_SIZE 1024       // Size for JSON document
 
@@ -109,6 +110,7 @@ DisplayState previousStateBeforeTransfer = STATE_PLACE_SENSOR;
 // NON-BLOCKING TRANSFER VARIABLES
 // ============================================================================
 File currentTransferFile;
+File transferRoot;
 String currentTransferFileName;
 size_t currentTransferBytesSent = 0;
 size_t currentTransferFileSize = 0;
@@ -283,7 +285,7 @@ void showPlaceSensorScreen() {
 void showAnalyzingScreen() {
   if(!systemStatus.oledOK) return;
   unsigned long currentTime = millis();
-  int remainingTime = 45 - ((currentTime - countdownStartTime) / 1000);
+  int remainingTime = (DATA_LOG_INTERVAL / 1000) - ((currentTime - countdownStartTime) / 1000);
   if (remainingTime < 0) remainingTime = 0;
   display.clearDisplay();
   display.setTextSize(1);
@@ -448,6 +450,65 @@ bool checkSDHealth() {
   return true;
 }
 
+
+
+// ============================================================================
+// TIME CONVERSION HELPER
+// ============================================================================
+/**
+ * @brief Converts the current systemStatus UTC time to IST (UTC+5:30).
+ * Handles all date, month, and year rollovers correctly.
+ * @param ist_year Output for IST year
+ * @param ist_month Output for IST month (1-12)
+ * @param ist_day Output for IST day (1-31)
+ * @param ist_hour Output for IST hour (0-23)
+ * @param ist_minute Output for IST minute (0-59)
+ */
+void getISTDateTime(int &ist_year, int &ist_month, int &ist_day, int &ist_hour, int &ist_minute) {
+  // 1. Create a struct tm for the UTC time
+  struct tm utc_tm;
+  utc_tm.tm_year = systemStatus.year - 1900;  // tm_year is years since 1900
+  utc_tm.tm_mon  = systemStatus.month - 1;    // tm_mon is 0-11
+  utc_tm.tm_mday = systemStatus.day;
+  utc_tm.tm_hour = systemStatus.hour;
+  utc_tm.tm_min  = systemStatus.minute;
+  utc_tm.tm_sec  = systemStatus.second;
+  utc_tm.tm_isdst = 0; // No daylight saving
+
+  // 2. Convert UTC struct tm to a time_t (Unix timestamp)
+  // --- FIX for 'timegm' is undefined ---
+  // We use mktime, but first, we set the local timezone to UTC.
+  // mktime assumes the input struct is "local time" and converts to UTC.
+  // By setting the timezone to UTC, we trick it into treating our UTC struct as "local".
+  
+  // Set Timezone to UTC
+  setenv("TZ", "UTC", 1);
+  tzset();
+
+  time_t utc_time = mktime(&utc_tm);
+  
+  // --- End of Fix ---
+
+  // 3. Define the IST offset in seconds (5 hours * 3600s/hr) + (30 minutes * 60s/min)
+  const long IST_OFFSET_SECONDS = 19800; // (5 * 3600) + (30 * 60)
+
+  // 4. Add the offset to get the IST time
+  time_t ist_time = utc_time + IST_OFFSET_SECONDS;
+
+  // 5. Convert the IST timestamp back into a struct tm
+  struct tm ist_tm;
+  gmtime_r(&ist_time, &ist_tm); // Use gmtime_r for thread-safety
+
+  // 6. Assign the correct values to the output variables
+  ist_year   = ist_tm.tm_year + 1900;
+  ist_month  = ist_tm.tm_mon + 1;
+  ist_day    = ist_tm.tm_mday;
+  ist_hour   = ist_tm.tm_hour;
+  ist_minute = ist_tm.tm_min;
+}
+
+
+
 void clearSDCardData() {
   if(!systemStatus.sdOK) return;
   Serial.println("🗑️  Clearing all existing SD card data...");
@@ -473,29 +534,44 @@ String generateJSONData() {
   doc["id"] = fileCounter;
   
   if(systemStatus.gpsFix) {
+    // --- Log UTC Data ---
     char timestamp[30];
     sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ",
       systemStatus.year, systemStatus.month, systemStatus.day,
       systemStatus.hour, systemStatus.minute, systemStatus.second);
     doc["timestamp"] = timestamp;
+    
     char time_utc[10];
     sprintf(time_utc, "%02d:%02d:%02d", systemStatus.hour, systemStatus.minute, systemStatus.second);
     doc["time_utc"] = time_utc;
-    int ist_hour = (systemStatus.hour + 5) % 24;
-    int ist_minute = systemStatus.minute + 30;
-    if(ist_minute >= 60) {
-      ist_minute -= 60;
-      ist_hour++;
-    }
+
+    // --- Get Correct IST Date & Time ---
+    int ist_year, ist_month, ist_day, ist_hour, ist_minute;
+    getISTDateTime(ist_year, ist_month, ist_day, ist_hour, ist_minute);
+
+    // --- Log IST Date ---
+    char date_ist[12];
+    sprintf(date_ist, "%04d-%02d-%02d", ist_year, ist_month, ist_day);
+    doc["date_ist"] = date_ist; // <-- NEW: Fixes ambiguity
+
+    // --- Log IST Time ---
     char time_ist[20];
-    sprintf(time_ist, "%02d:%02d %s", ist_hour, ist_minute, ist_hour >= 12 ? "PM" : "AM");
+    // Use the 12-hour format
+    int ist_hour_12 = ist_hour % 12;
+    if (ist_hour_12 == 0) ist_hour_12 = 12; // 0 o'clock is 12 AM
+    
+    sprintf(time_ist, "%02d:%02d %s", ist_hour_12, ist_minute, ist_hour >= 12 ? "PM" : "AM");
     doc["time_ist"] = time_ist;
+
   } else {
+    // Default timestamp values
     doc["timestamp"] = "0000-00-00T00:00:00Z";
     doc["time_utc"] = "00:00:00";
+    doc["date_ist"] = "0000-00-00"; // <-- NEW
     doc["time_ist"] = "00:00 AM";
   }
   
+  // (Rest of your function is perfect)
   JsonObject location = doc["location"].to<JsonObject>();
   location["latitude"] = systemStatus.gpsFix ? systemStatus.latitude : 0.0;
   location["longitude"] = systemStatus.gpsFix ? systemStatus.longitude : 0.0;
@@ -602,12 +678,12 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
   while(Serial1.available()) Serial1.read();
   digitalWrite(RS485_DE, HIGH);
   digitalWrite(RS485_RE, HIGH);
-  delay(2);
+  delay(10); // FIX: Was 2
   Serial1.write(txBuf, pos);
   Serial1.flush();
   digitalWrite(RS485_DE, LOW);
   digitalWrite(RS485_RE, LOW);
-  delay(2);
+  delay(10);  // FIX: Was 2
   
   unsigned long startTime = millis();
   int rxLen = 0;
@@ -764,6 +840,11 @@ void startDynamicFileTransfer() {
     Serial.println("⚠️  Transfer already in progress");
     return;
   }
+  transferRoot = SD.open("/farmland_data");
+  if (!transferRoot){
+    Serial.println("❌ Failed to open /farmland_data directory");
+    return;
+  }
 
   previousStateBeforeTransfer = currentState;
   transferPending = true;
@@ -777,10 +858,8 @@ void processTransferChunk() {
     // Start new transfer
     transferInProgress = true;
     transferPending = false;
-    
-    File root = SD.open("/farmland_data");
-    if (root) {
-      File file = root.openNextFile();
+    if (transferRoot) {
+      File file = transferRoot.openNextFile();
       if (file && !file.isDirectory()) {
         currentTransferFile = file;
         currentTransferFileName = file.name();
@@ -794,6 +873,7 @@ void processTransferChunk() {
       } else {
         // No more files
         transferInProgress = false;
+        if(transferRoot) transferRoot.close();
         String completeMsg = "TRANSFER_COMPLETE|All files transferred!";
         pFileTransferCharacteristic->setValue(completeMsg.c_str());
         pFileTransferCharacteristic->notify();
@@ -801,7 +881,10 @@ void processTransferChunk() {
         beep(300);
         resetToNormalOperation();
       }
-      root.close();
+    } else {
+      Serial.println("❌ Transfer error: transferRoot is not open!");
+      transferInProgress = false;
+      resetToNormalOperation();
     }
     lastTransferChunkTime = millis();
     return;
@@ -888,6 +971,9 @@ void resetToNormalOperation() {
   transferPending = false;
   if (currentTransferFile) {
     currentTransferFile.close();
+  }
+  if (transferRoot){
+    transferRoot.close();
   }
   changeState(STATE_PLACE_SENSOR);
   Serial.println("🔄 System reset to normal operation");
@@ -1099,7 +1185,7 @@ void loop() {
         break;
         
       case STATE_ANALYZING:
-        if (currentTime - stateStartTime >= 45000) {
+        if (currentTime - stateStartTime >= DATA_LOG_INTERVAL) { //45000
           logDataToSD();
         }
         break;
