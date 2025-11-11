@@ -9,10 +9,15 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include <ArduinoJson.h>
+#include <esp_task_wdt.h>
+
 // ============================================================================
 // CONFIGURABLE SETTINGS
 // ============================================================================
 #define DATA_LOG_INTERVAL 30000  // Change this value as needed (in milliseconds)
+#define WATCHDOG_TIMEOUT 30      // Watchdog timeout in seconds
+#define JSON_DOC_SIZE 1024       // Size for JSON document
+
 // ============================================================================
 // OLED CONFIGURATION
 // ============================================================================
@@ -22,6 +27,7 @@
 #define OLED_SDA 8
 #define OLED_SCL 9
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
 // ============================================================================
 // SD CARD CONFIGURATION
 // ============================================================================
@@ -31,6 +37,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define SD_MISO 13
 bool sdOK = false;
 int fileCounter = 1;
+
 // ============================================================================
 // RS485 SOIL SENSOR CONFIGURATION (ZTS-3002)
 // ============================================================================
@@ -49,6 +56,7 @@ int fileCounter = 1;
 #define REG_NITROGEN       0x0006
 #define REG_PHOSPHORUS     0x0007
 #define REG_POTASSIUM      0x0008
+
 // ============================================================================
 // GPS CONFIGURATION
 // ============================================================================
@@ -57,11 +65,13 @@ int fileCounter = 1;
 #define GPS_TX_PIN 21
 TinyGPSPlus gps;
 unsigned long gpsCharsProcessed = 0;
+
 // ============================================================================
 // BUZZER CONFIGURATION
 // ============================================================================
 #define BUZZER_PIN 7
 int buzzerVolume = 180;
+
 // ============================================================================
 // DISPLAY STATES
 // ============================================================================
@@ -73,10 +83,12 @@ enum DisplayState {
   STATE_FILE_CREATED,
   STATE_BLE_TRANSFER
 };
+
 DisplayState currentState = STATE_INITIAL;
 unsigned long stateStartTime = 0;
 unsigned long countdownStartTime = 0;
 int countdownValue = 0;
+
 // ============================================================================
 // BLE CONFIGURATION
 // ============================================================================
@@ -86,10 +98,31 @@ BLECharacteristic* pCommandCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 bool transferInProgress = false;
-DisplayState previousStateBeforeTransfer = STATE_PLACE_SENSOR; // Store state before transfer
+bool transferPending = false;
+DisplayState previousStateBeforeTransfer = STATE_PLACE_SENSOR;
+
 #define SERVICE_UUID "12345678-1234-1234-1234-123456789abc"
 #define CHARACTERISTIC_UUID_TRANSFER "abcdef12-3456-7890-1234-567890abcdef"
 #define CHARACTERISTIC_UUID_COMMAND "abcdef13-3456-7890-1234-567890abcdef"
+
+// ============================================================================
+// NON-BLOCKING TRANSFER VARIABLES
+// ============================================================================
+File currentTransferFile;
+String currentTransferFileName;
+size_t currentTransferBytesSent = 0;
+size_t currentTransferFileSize = 0;
+unsigned long lastTransferChunkTime = 0;
+const size_t TRANSFER_CHUNK_SIZE = 128;
+
+// ============================================================================
+// ERROR RECOVERY VARIABLES
+// ============================================================================
+int soilSensorFailureCount = 0;
+const int MAX_SENSOR_FAILURES = 5;
+unsigned long lastSensorReset = 0;
+const unsigned long SENSOR_RESET_COOLDOWN = 10000;
+
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
@@ -104,6 +137,7 @@ struct SensorData {
   bool basicValid = false;
   bool npkValid = false;
 };
+
 struct SystemStatus {
   bool oledOK = false;
   bool sdOK = false;
@@ -122,8 +156,10 @@ struct SystemStatus {
   int minute = 15;
   int second = 28;
 };
+
 SensorData soilData;
 SystemStatus systemStatus;
+
 // ============================================================================
 // ANIMATION DATA
 // ============================================================================
@@ -134,7 +170,7 @@ SystemStatus systemStatus;
 const byte PROGMEM frames_snow[][512] = {
   {0,0,0,0,0,4,0,0,0,0,0,0,0,14,0,0,0,0,0,0,0,14,0,0,0,0,0,0,0,63,128,0,0,0,0,0,0,63,128,0,0,0,0,0,1,158,50,0,0,0,0,0,15,142,63,0,0,0,24,0,15,142,62,0,0,0,24,0,7,206,124,0,0,0,24,0,7,255,254,0,0,0,24,0,6,255,236,0,0,8,24,56,0,63,128,0,0,30,28,120,0,63,128,0,0,15,157,240,6,127,238,0,0,7,255,224,7,254,252,0,0,1,255,128,7,206,126,0,0,0,126,0,15,134,63,0,0,0,127,0,15,134,63,0,0,1,255,192,1,159,144,0,0,7,223,240,0,31,128,0,0,15,156,248,0,31,128,0,0,14,28,56,0,6,0,0,0,8,28,0,0,6,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,96,0,0,0,0,0,0,0,96,0,0,0,0,0,0,0,112,0,0,0,0,0,0,0,113,0,0,0,0,0,0,14,119,128,0,0,0,0,0,15,255,0,0,0,0,0,0,7,254,0,0,0,0,0,0,1,248,0,0,0,0,0,0,3,254,0,0,0,0,0,0,7,255,0,0,0,0,0,0,15,119,128,0,0,0,0,0,12,113,0,0,0,0,3,0,0,112,0,0,0,0,3,176,0,112,0,0,0,0,3,240,0,112,0,0,0,0,3,240,0,0,0,0,0,0,7,192,0,0,0,0,0,0,7,224,0,0,1,192,0,0,0,224,0,0,1,192,0,0,0,64,0,0,1,192,0,96,0,0,0,0,25,206,0,112,0,0,0,0,63,254,0,115,128,0,0,0,31,248,0,63,128,0,0,0,7,240,0,127,0,0,0,0,7,240,1,252,0,0,0,0,15,252,1,252,0,0,0,0,63,254,1,140,0,0,0,0,57,206,0,14,0,0,0,0,1,192,0,12,0,0,0,0,1,192,0,0,0,0,0,0,1,192,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
 };
-// --- Animation 2: Leaf ---
+
 #define FRAME_LEAF_DELAY (42)
 #define FRAME_LEAF_WIDTH (64)
 #define FRAME_LEAF_HEIGHT (64)
@@ -143,15 +179,18 @@ const byte PROGMEM frames_leaf[][512] = {
   {0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0,248,0,0,0,0,0,0,1,248,0,0,0,0,0,0,7,220,0,0,0,0,0,0,63,156,0,0,0,0,0,1,254,12,0,0,0,0,0,31,248,14,0,0,0,0,1,255,192,14,0,0,0,0,15,248,0,6,0,0,0,0,127,128,0,7,0,0,0,0,252,0,0,7,0,0,0,3,224,0,0,3,0,0,0,15,128,0,0,3,128,0,0,30,0,0,0,3,128,0,0,60,0,0,0,1,128,0,0,240,0,0,0,1,128,0,0,224,0,0,0,1,192,0,1,192,0,0,6,1,192,0,3,128,0,0,7,1,192,0,7,0,0,0,14,0,192,0,14,0,0,0,14,0,192,0,14,0,0,0,28,0,192,0,28,0,0,0,28,0,224,0,28,0,0,0,56,0,224,0,56,0,0,0,56,0,224,0,56,0,0,0,112,0,224,0,48,0,0,0,112,0,224,0,48,0,0,0,224,0,224,0,112,0,0,0,224,0,224,0,112,0,0,1,192,0,224,0,112,0,0,3,128,0,224,0,112,0,0,3,128,0,224,0,112,0,0,7,0,0,224,0,48,0,0,15,0,0,224,0,56,0,0,14,0,0,192,0,56,0,0,28,0,0,192,0,28,0,0,56,0,1,192,0,28,0,0,120,0,1,192,0,14,0,0,240,0,1,192,0,7,0,0,224,0,1,128,0,7,128,1,192,0,3,128,0,3,192,3,128,0,3,128,0,1,224,7,0,0,7,0,0,0,248,14,0,0,7,0,0,0,126,30,0,0,14,0,0,0,31,252,0,0,14,0,0,0,7,248,0,0,28,0,0,0,1,240,0,0,60,0,0,0,3,240,0,0,120,0,0,0,7,184,0,0,240,0,0,0,15,24,0,1,224,0,0,0,62,28,0,3,192,0,0,0,252,15,0,15,128,0,0,3,240,7,128,31,0,0,0,31,224,3,255,252,0,0,15,255,128,0,255,240,0,0,7,252,0,0,31,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
   {0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0,248,0,0,0,0,0,0,1,248,0,0,0,0,0,0,7,220,0,0,0,0,0,0,63,156,0,0,0,0,0,1,254,12,0,0,0,0,0,31,248,14,0,0,0,0,1,255,192,14,0,0,0,0,15,248,0,6,0,0,0,0,127,128,0,7,0,0,0,0,252,0,0,7,0,0,0,3,224,0,0,3,0,0,0,15,128,0,0,3,128,0,0,30,0,0,0,3,128,0,0,60,0,0,0,1,128,0,0,240,0,0,0,1,128,0,0,224,0,0,0,1,192,0,1,192,0,0,6,1,192,0,3,128,0,0,7,1,192,0,7,0,0,0,14,0,192,0,14,0,0,0,14,0,192,0,14,0,0,0,28,0,192,0,28,0,0,0,28,0,224,0,28,0,0,0,56,0,224,0,56,0,0,0,56,0,224,0,56,0,0,0,112,0,224,0,48,0,0,0,112,0,224,0,48,0,0,0,224,0,224,0,112,0,0,0,224,0,224,0,112,0,0,1,192,0,224,0,112,0,0,3,128,0,224,0,112,0,0,3,128,0,224,0,112,0,0,7,0,0,224,0,48,0,0,15,0,0,224,0,56,0,0,14,0,0,192,0,56,0,0,28,0,0,192,0,28,0,0,56,0,1,192,0,28,0,0,120,0,1,192,0,14,0,0,240,0,1,192,0,7,0,0,224,0,1,128,0,7,128,1,192,0,3,128,0,3,192,3,128,0,3,128,0,1,224,7,0,0,7,0,0,0,248,14,0,0,7,0,0,0,126,30,0,0,14,0,0,0,31,252,0,0,14,0,0,0,7,248,0,0,28,0,0,0,1,240,0,0,60,0,0,0,3,240,0,0,120,0,0,0,7,184,0,0,240,0,0,0,15,24,0,1,224,0,0,0,62,28,0,3,192,0,0,0,252,15,0,15,128,0,0,3,240,7,128,31,0,0,0,31,224,3,255,252,0,0,15,255,128,0,255,240,0,0,7,252,0,0,31,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
 };
+
 // ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
 void playIntroAnimation();
 void startDynamicFileTransfer();
+void processTransferChunk();
 void formatSDCard();
 String generateJSONData();
 void logDataToSD();
 void changeState(DisplayState newState);
+bool isValidStateTransition(DisplayState from, DisplayState to);
 void updateDisplayState();
 void showInitialScreen();
 void showComponentCheckScreen();
@@ -161,6 +200,11 @@ void showFileCreatedScreen();
 void showBLETransferScreen();
 void clearSDCardData();
 void resetToNormalOperation();
+void recoverFromSoilSensorFailure();
+bool checkSDHealth();
+void monitorSystemHealth();
+void resetSoilSensor();
+
 // ============================================================================
 // BUZZER FUNCTIONS
 // ============================================================================
@@ -169,6 +213,7 @@ void beep(int duration = 100) {
   delay(duration);
   analogWrite(BUZZER_PIN, 0);
 }
+
 // ============================================================================
 // OLED DISPLAY FUNCTIONS
 // ============================================================================
@@ -183,13 +228,13 @@ void initOLED() {
   systemStatus.oledOK = true;
   Serial.println("✅ OLED initialized");
 }
+
 void showInitialScreen() {
   if(!systemStatus.oledOK) return;
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(2);
   display.setCursor(0,0);
-  // Animation effect - centered text
   display.println("  AGNI");
   display.println("  SOIL");
   display.println(" SENSOR");
@@ -234,6 +279,7 @@ void showPlaceSensorScreen() {
   display.printf("Countdown: %d\n", remainingTime);
   display.display();
 }
+
 void showAnalyzingScreen() {
   if(!systemStatus.oledOK) return;
   unsigned long currentTime = millis();
@@ -288,6 +334,13 @@ void showBLETransferScreen() {
 }
 
 void updateDisplayState() {
+  static unsigned long lastUpdate = 0;
+  // Only update display every second unless in analyzing state
+  if (millis() - lastUpdate < 1000 && currentState != STATE_ANALYZING) {
+    return;
+  }
+  lastUpdate = millis();
+  
   switch(currentState) {
     case STATE_INITIAL:
       showInitialScreen();
@@ -309,38 +362,61 @@ void updateDisplayState() {
       break;
   }
 }
+
+bool isValidStateTransition(DisplayState from, DisplayState to) {
+  switch (from) {
+    case STATE_INITIAL:
+      return to == STATE_COMPONENT_CHECK;
+    case STATE_COMPONENT_CHECK:
+      return to == STATE_PLACE_SENSOR;
+    case STATE_PLACE_SENSOR:
+      return to == STATE_ANALYZING || to == STATE_BLE_TRANSFER;
+    case STATE_ANALYZING:
+      return to == STATE_FILE_CREATED || to == STATE_BLE_TRANSFER;
+    case STATE_FILE_CREATED:
+      return to == STATE_PLACE_SENSOR || to == STATE_BLE_TRANSFER;
+    case STATE_BLE_TRANSFER:
+      return to == STATE_PLACE_SENSOR;
+    default:
+      return false;
+  }
+}
+
 void changeState(DisplayState newState) {
+  if (!isValidStateTransition(currentState, newState)) {
+    Serial.printf("⚠️ Invalid state transition: %d -> %d\n", currentState, newState);
+    return;
+  }
+  
   currentState = newState;
   stateStartTime = millis();
   countdownStartTime = millis();
   updateDisplayState();
+  
+  Serial.printf("🔄 State changed to: %d\n", newState);
 }
+
 // ============================================================================
 // ANIMATION FUNCTION
 // ============================================================================
 void playIntroAnimation() {
-  if(!systemStatus.oledOK) return; // Don't play if OLED failed
+  if(!systemStatus.oledOK) return;
   Serial.println("▶️  Playing intro animation 1 (Snow)...");
-  // Loop through all frames once
   for (int frame = 0; frame < FRAME_SNOW_COUNT; frame++) {
     display.clearDisplay();
-    
-    // The animation is 64x64, screen is 128x64. Center it at x=32.
     display.drawBitmap(32, 0, frames_snow[frame], FRAME_SNOW_WIDTH, FRAME_SNOW_HEIGHT, SSD1306_WHITE);
-    
     display.display();
     delay(FRAME_SNOW_DELAY);
   }
   Serial.println("▶️  Playing intro animation 2 (Leaf)...");
-  // Loop through all frames of the second animation (leaf)
   for (int frame = 0; frame < FRAME_LEAF_COUNT; frame++) {
     display.clearDisplay();
-    // Center the 64x64 animation on the 128x64 screen
     display.drawBitmap(32, 0, frames_leaf[frame], FRAME_LEAF_WIDTH, FRAME_LEAF_HEIGHT, SSD1306_WHITE);
     display.display();
     delay(FRAME_LEAF_DELAY);
   }
 }
+
 // ============================================================================
 // SD CARD FUNCTIONS
 // ============================================================================
@@ -354,13 +430,24 @@ void initSDCard() {
   uint8_t cardType = SD.cardType();
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   Serial.printf("✅ SD Card initialized: %llu MB\n", cardSize);
-  // Clear all existing data on startup
   clearSDCardData();
   if(!SD.exists("/farmland_data")) {
     SD.mkdir("/farmland_data");
   }
   systemStatus.sdOK = true;
 }
+
+bool checkSDHealth() {
+  if (!systemStatus.sdOK) return false;
+  
+  uint64_t freeBytes = SD.totalBytes() - SD.usedBytes();
+  if (freeBytes < 1024 * 1024) {
+    Serial.println("⚠️ SD card running low on space!");
+    return false;
+  }
+  return true;
+}
+
 void clearSDCardData() {
   if(!systemStatus.sdOK) return;
   Serial.println("🗑️  Clearing all existing SD card data...");
@@ -380,10 +467,11 @@ void clearSDCardData() {
   fileCounter = 1;
   Serial.println("✅ All previous data cleared!");
 }
+
 String generateJSONData() {
-  JsonDocument doc;
+  StaticJsonDocument<JSON_DOC_SIZE> doc;
   doc["id"] = fileCounter;
-  // Use default values if GPS not fixed
+  
   if(systemStatus.gpsFix) {
     char timestamp[30];
     sprintf(timestamp, "%04d-%02d-%02dT%02d:%02d:%02dZ",
@@ -403,13 +491,11 @@ String generateJSONData() {
     sprintf(time_ist, "%02d:%02d %s", ist_hour, ist_minute, ist_hour >= 12 ? "PM" : "AM");
     doc["time_ist"] = time_ist;
   } else {
-    // Default timestamp values
     doc["timestamp"] = "0000-00-00T00:00:00Z";
     doc["time_utc"] = "00:00:00";
     doc["time_ist"] = "00:00 AM";
   }
   
-  // Location data with defaults if no GPS fix
   JsonObject location = doc["location"].to<JsonObject>();
   location["latitude"] = systemStatus.gpsFix ? systemStatus.latitude : 0.0;
   location["longitude"] = systemStatus.gpsFix ? systemStatus.longitude : 0.0;
@@ -419,13 +505,12 @@ String generateJSONData() {
   location["speed_kmh"] = systemStatus.gpsFix ? gps.speed.kmph() : 0.0;
   location["hdop"] = systemStatus.gpsFix ? gps.hdop.hdop() : 0.0;
   
-  // pH category
   if(soilData.ph < 5.5) doc["ph_category"] = "acidic";
   else if(soilData.ph < 6.5) doc["ph_category"] = "slightly_acidic";
   else if(soilData.ph < 7.5) doc["ph_category"] = "neutral";
   else if(soilData.ph < 8.5) doc["ph_category"] = "slightly_alkaline";
   else doc["ph_category"] = "alkaline";
-  // Parameters
+  
   JsonObject params = doc["parameters"].to<JsonObject>();
   params["ph_value"] = soilData.ph;
   params["conductivity"] = soilData.conductivity;
@@ -435,28 +520,31 @@ String generateJSONData() {
   params["moisture"] = soilData.moisture;
   params["temperature"] = soilData.temperature;
   doc["sensor_valid"] = soilData.basicValid && soilData.npkValid;
+  
   String jsonString;
   serializeJson(doc, jsonString);
   return jsonString;
 }
+
 void logDataToSD() {
-  if(!systemStatus.sdOK) return;
+  if(!systemStatus.sdOK || !checkSDHealth()) return;
+  
   String filename = "/farmland_data/farmland_" + String(fileCounter) + ".json";
   File file = SD.open(filename, FILE_WRITE);
   if(!file) {
     Serial.println("❌ Failed to create JSON file: " + filename);
     return;
   }
+  
   String jsonData = generateJSONData();
   file.print(jsonData);
   file.close();
   
   fileCounter++;
   Serial.println("✅ JSON data logged to SD card: " + filename);
-  
-  // Show file creation success message
   changeState(STATE_FILE_CREATED);
 }
+
 // ============================================================================
 // MODBUS/RS485 FUNCTIONS
 // ============================================================================
@@ -474,6 +562,28 @@ uint16_t crc16_modbus(uint8_t *buf, int len) {
   }
   return crc;
 }
+
+void resetSoilSensor() {
+  Serial1.end();
+  delay(100);
+  Serial1.begin(MODBUS_BAUD, SERIAL_8N1, RS485_RX, RS485_TX);
+  soilSensorFailureCount = 0;
+  Serial.println("🔄 Soil sensor reset");
+}
+
+void recoverFromSoilSensorFailure() {
+  if (millis() - lastSensorReset < SENSOR_RESET_COOLDOWN) return;
+  
+  soilSensorFailureCount++;
+  Serial.printf("⚠️ Soil sensor failure count: %d/%d\n", soilSensorFailureCount, MAX_SENSOR_FAILURES);
+  
+  if (soilSensorFailureCount >= MAX_SENSOR_FAILURES) {
+    Serial.println("🔄 Attempting sensor recovery...");
+    resetSoilSensor();
+    lastSensorReset = millis();
+  }
+}
+
 bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *result) {
   uint8_t txBuf[8];
   uint8_t rxBuf[256];
@@ -488,6 +598,7 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
   uint16_t crc = crc16_modbus(txBuf, pos);
   txBuf[pos++] = (crc & 0xFF);
   txBuf[pos++] = (crc >> 8);
+  
   while(Serial1.available()) Serial1.read();
   digitalWrite(RS485_DE, HIGH);
   digitalWrite(RS485_RE, HIGH);
@@ -497,6 +608,7 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
   digitalWrite(RS485_DE, LOW);
   digitalWrite(RS485_RE, LOW);
   delay(2);
+  
   unsigned long startTime = millis();
   int rxLen = 0;
   while(millis() - startTime < MODBUS_TIMEOUT && rxLen < sizeof(rxBuf)) {
@@ -514,16 +626,19 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
   uint16_t receivedCrc = (rxBuf[rxLen-1] << 8) | rxBuf[rxLen-2];
   uint16_t calculatedCrc = crc16_modbus(rxBuf, rxLen - 2);
   if(receivedCrc != calculatedCrc) return false;
+  
   for(int i = 0; i < regCount; i++) {
     result[i] = (rxBuf[3 + i*2] << 8) | rxBuf[4 + i*2];
   }
   return true;
 }
+
 bool readSoilSensor() {
   uint16_t regs[4];
   
   if(!modbusRead(MODBUS_ADDRESS, REG_MOISTURE, 4, regs)) {
     soilData.basicValid = false;
+    recoverFromSoilSensorFailure();
     return false;
   }
   
@@ -545,6 +660,7 @@ bool readSoilSensor() {
   }
   
   systemStatus.soilSensorOK = soilData.basicValid;
+  soilSensorFailureCount = 0; // Reset counter on successful read
   return soilData.basicValid;
 }
 
@@ -556,6 +672,11 @@ void updateGPS() {
     char c = GPS_SERIAL.read();
     gps.encode(c);
     gpsCharsProcessed++;
+    
+    // Prevent overflow
+    if (gpsCharsProcessed > 10000) {
+      gpsCharsProcessed = 100;
+    }
   }
   
   systemStatus.gpsOK = (gpsCharsProcessed > 10);
@@ -600,17 +721,18 @@ class MyServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer* pServer) {
     deviceConnected = false;
     transferInProgress = false;
+    transferPending = false;
     Serial.println("🔴 BLE Client disconnected");
     delay(500);
     BLEDevice::startAdvertising();
     Serial.println("📡 BLE Advertising restarted\n");
     
-    // Restore normal operation after disconnect
     if (currentState == STATE_BLE_TRANSFER) {
       resetToNormalOperation();
     }
   }
 };
+
 class CommandCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* pCharacteristic) {
     std::string value = pCharacteristic->getValue();
@@ -632,117 +754,97 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     }
   }
 };
+
 // ============================================================================
-// BLE FILE TRANSFER
+// BLE FILE TRANSFER (NON-BLOCKING)
 // ============================================================================
-void sendFile(String filePath) {
-  if (!deviceConnected || !transferInProgress) {
-    Serial.println("❌ Transfer interrupted");
-    return;
-  }
-
-  File file = SD.open(filePath, FILE_READ);
-  if (!file) {
-    Serial.println("❌ Cannot open file: " + filePath);
-    return;
-  }
-  size_t fileSize = file.size();
-  size_t bytesSent = 0;
-  String fileName = file.name();
-  Serial.println("📤 Transferring: " + fileName + " (" + String(fileSize) + " bytes)");
-  String fileHeader = "FILE_START:" + fileName + "|SIZE:" + String(fileSize);
-  pFileTransferCharacteristic->setValue(fileHeader.c_str());
-  pFileTransferCharacteristic->notify();
-  delay(120);
-  const size_t CHUNK_SIZE = 128;
-  uint8_t buffer[CHUNK_SIZE];
-  while (file.available() && deviceConnected && transferInProgress) {
-    size_t bytesRead = file.read(buffer, CHUNK_SIZE);
-    if (bytesRead > 0) {
-      pFileTransferCharacteristic->setValue(buffer, bytesRead);
-      pFileTransferCharacteristic->notify();
-
-      bytesSent += bytesRead;
-      int progress = (int)((bytesSent * 100) / fileSize);
-
-      if (progress % 10 == 0) {
-        Serial.println(String(fileName) + " " + String(progress) + "%");
-      }
-    }
-    delay(5);
-  }
-  if (deviceConnected && transferInProgress) {
-    String fileEnd = "FILE_END:" + fileName;
-    pFileTransferCharacteristic->setValue(fileEnd.c_str());
-    pFileTransferCharacteristic->notify();
-    Serial.println("✅ Transferred: " + fileName);
-  }
-
-  file.close();
-}
-
 void startDynamicFileTransfer() {
   if (!systemStatus.sdOK || !deviceConnected) return;
-  if (transferInProgress) {
+  if (transferInProgress || transferPending) {
     Serial.println("⚠️  Transfer already in progress");
     return;
   }
 
-  // Store current state before starting transfer
   previousStateBeforeTransfer = currentState;
-  
-  transferInProgress = true;
+  transferPending = true;
   Serial.println("\n🚀 STARTING BLE FILE TRANSFER...");
   beep(150);
-
-  // Change to transfer state
   changeState(STATE_BLE_TRANSFER);
+}
 
-  int totalFiles = 0;
-  File root = SD.open("/farmland_data");
-  if (root) {
-    File file = root.openNextFile();
-    while (file) {
-      if (!file.isDirectory()) {
-        totalFiles++;
+void processTransferChunk() {
+  if (!transferInProgress && transferPending) {
+    // Start new transfer
+    transferInProgress = true;
+    transferPending = false;
+    
+    File root = SD.open("/farmland_data");
+    if (root) {
+      File file = root.openNextFile();
+      if (file && !file.isDirectory()) {
+        currentTransferFile = file;
+        currentTransferFileName = file.name();
+        currentTransferFileSize = file.size();
+        currentTransferBytesSent = 0;
+        
+        String fileHeader = "FILE_START:" + currentTransferFileName + "|SIZE:" + String(currentTransferFileSize);
+        pFileTransferCharacteristic->setValue(fileHeader.c_str());
+        pFileTransferCharacteristic->notify();
+        Serial.println("📤 Starting transfer: " + currentTransferFileName);
+      } else {
+        // No more files
+        transferInProgress = false;
+        String completeMsg = "TRANSFER_COMPLETE|All files transferred!";
+        pFileTransferCharacteristic->setValue(completeMsg.c_str());
+        pFileTransferCharacteristic->notify();
+        Serial.println("🎉 ALL FILES TRANSFERRED SUCCESSFULLY!");
+        beep(300);
+        resetToNormalOperation();
       }
-      file = root.openNextFile();
+      root.close();
     }
-    root.close();
+    lastTransferChunkTime = millis();
+    return;
   }
 
-  Serial.printf("📊 Total files to send: %d\n", totalFiles);
+  if (!transferInProgress || !currentTransferFile) return;
 
-  root = SD.open("/farmland_data");
-  if (root) {
-    File file = root.openNextFile();
-    while (file && deviceConnected && transferInProgress) {
-      if (!file.isDirectory()) {
-        sendFile("/farmland_data/" + String(file.name()));
-        delay(200);
+  if (millis() - lastTransferChunkTime < 5) return; // Throttle transfers
+  
+  if (currentTransferBytesSent < currentTransferFileSize) {
+    uint8_t buffer[TRANSFER_CHUNK_SIZE];
+    size_t bytesRead = currentTransferFile.read(buffer, TRANSFER_CHUNK_SIZE);
+    if (bytesRead > 0) {
+      pFileTransferCharacteristic->setValue(buffer, bytesRead);
+      pFileTransferCharacteristic->notify();
+      currentTransferBytesSent += bytesRead;
+      
+      int progress = (int)((currentTransferBytesSent * 100) / currentTransferFileSize);
+      if (progress % 20 == 0) {
+        Serial.println(String(currentTransferFileName) + " " + String(progress) + "%");
       }
-      file = root.openNextFile();
     }
-    root.close();
-  }
-  if (deviceConnected && transferInProgress) {
-    String completeMsg = "TRANSFER_COMPLETE|All " + String(totalFiles) + " files transferred!";
-    pFileTransferCharacteristic->setValue(completeMsg.c_str());
+  } else {
+    // File transfer complete
+    currentTransferFile.close();
+    String fileEnd = "FILE_END:" + currentTransferFileName;
+    pFileTransferCharacteristic->setValue(fileEnd.c_str());
     pFileTransferCharacteristic->notify();
-    Serial.println("🎉 ALL FILES TRANSFERRED SUCCESSFULLY!");
-    beep(300);
+    Serial.println("✅ Transferred: " + currentTransferFileName);
+    
+    // Move to next file
+    transferInProgress = false;
+    transferPending = true; // Process next file in next iteration
   }
-  transferInProgress = false;
-  if (deviceConnected) {
-    resetToNormalOperation();
-  }
+  
+  lastTransferChunkTime = millis();
 }
 
 void autoStartTransfer() {
   static bool transferStarted = false;
   static unsigned long connectionTime = 0;
 
-  if (deviceConnected && !transferStarted && !transferInProgress) {
+  if (deviceConnected && !transferStarted && !transferInProgress && !transferPending) {
     if (connectionTime == 0) {
       connectionTime = millis();
       Serial.println("⏱️  Auto-transfer will start in 5 seconds...");
@@ -782,13 +884,15 @@ void formatSDCard() {
 }
 
 void resetToNormalOperation() {
-  if (transferInProgress) {
-    transferInProgress = false;
+  transferInProgress = false;
+  transferPending = false;
+  if (currentTransferFile) {
+    currentTransferFile.close();
   }
-  // Return to normal operation - default to PLACE_SENSOR state
   changeState(STATE_PLACE_SENSOR);
   Serial.println("🔄 System reset to normal operation");
 }
+
 void initializeBLE() {
   Serial.println("📡 Initializing BLE...");
   BLEDevice::init("AGNI-SOIL-SENSOR");
@@ -823,6 +927,23 @@ void initializeBLE() {
   Serial.println("✅ BLE initialized successfully!");
   Serial.println("📡 Advertising as: AGNI-SOIL-SENSOR\n");
 }
+
+// ============================================================================
+// SYSTEM HEALTH MONITORING
+// ============================================================================
+void monitorSystemHealth() {
+  static unsigned long lastHealthCheck = 0;
+  if (millis() - lastHealthCheck < 30000) return;
+  
+  Serial.printf("📊 Free heap: %d bytes\n", esp_get_free_heap_size());
+  
+  if (!checkSDHealth()) {
+    Serial.println("⚠️  SD Card health check failed!");
+  }
+  
+  lastHealthCheck = millis();
+}
+
 // ============================================================================
 // SYSTEM STATUS DISPLAY
 // ============================================================================
@@ -865,7 +986,9 @@ void printSystemStatus() {
   
   Serial.printf("║ 💾 Files Logged: %d                                           ║\n", fileCounter - 1);
   Serial.printf("║ 🔄 Transfer State: %s                                  ║\n", 
-    transferInProgress ? "IN PROGRESS" : "IDLE");
+    transferInProgress ? "IN PROGRESS" : (transferPending ? "PENDING" : "IDLE"));
+  Serial.printf("║ 📊 Heap: %d bytes  Failures: %d                          ║\n", 
+    esp_get_free_heap_size(), soilSensorFailureCount);
   Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
 }
 
@@ -878,8 +1001,12 @@ void setup() {
   
   Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
   Serial.println("║          🌱 AGNI SOIL SENSOR - COMPLETE INTEGRATED SYSTEM      ║");
-  Serial.println("║                    All Systems Working Together                ║");
+  Serial.println("║                  With Enhanced Reliability                    ║");
   Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+  
+  // Initialize watchdog timer
+  esp_task_wdt_init(WATCHDOG_TIMEOUT, true);
+  esp_task_wdt_add(NULL);
   
   // Buzzer init
   pinMode(BUZZER_PIN, OUTPUT);
@@ -887,15 +1014,17 @@ void setup() {
   beep(100);
   
   Serial.println("🔧 Initializing components...\n");
+  
+  // OLED - Initialize FIRST
+  initOLED();
+  
   if (systemStatus.oledOK) {
     Serial.println("▶️  Playing intro animation...");
     playIntroAnimation();
   }
+  
   // Start with initial display state
   changeState(STATE_INITIAL);
-  
-  // OLED
-  initOLED();
   
   // SD Card
   initSDCard();
@@ -929,17 +1058,25 @@ void setup() {
 // MAIN LOOP
 // ============================================================================
 void loop() {
+  // Reset watchdog timer
+  esp_task_wdt_reset();
+  
   static unsigned long lastSoilRead = 0;
   static unsigned long lastStatusDisplay = 0;
   static unsigned long lastDataLog = 0;
   static unsigned long lastOLEDUpdate = 0;
   static bool initialReadDone = false;
   
-  // Continuous GPS update (always runs)
+  // Continuous GPS update
   updateGPS();
   
+  // Handle BLE file transfer (non-blocking)
+  if (transferInProgress || transferPending) {
+    processTransferChunk();
+  }
+  
   // Handle state transitions - ONLY if not transferring files
-  if (!transferInProgress) {
+  if (!transferInProgress && !transferPending) {
     unsigned long currentTime = millis();
     
     switch(currentState) {
@@ -963,28 +1100,25 @@ void loop() {
         
       case STATE_ANALYZING:
         if (currentTime - stateStartTime >= 45000) {
-          // Time to log data and create file
           logDataToSD();
         }
         break;
         
       case STATE_FILE_CREATED:
         if (currentTime - stateStartTime >= 3000) {
-          // Return to place sensor state
           changeState(STATE_PLACE_SENSOR);
         }
         break;
         
       case STATE_BLE_TRANSFER:
-        // Stay in transfer state until transfer completes
         break;
     }
   }
   
-  // Read soil sensor every 5 seconds (always runs, even during transfer)
+  // Read soil sensor every 5 seconds
   if(millis() - lastSoilRead >= 5000) {
     if(readSoilSensor()) {
-      if (!transferInProgress) { // Only print if not in transfer to avoid clutter
+      if (!transferInProgress) {
         Serial.println("✅ Soil sensor data updated");
       }
     } else {
@@ -994,17 +1128,24 @@ void loop() {
     }
     lastSoilRead = millis();
   }
+  
+  // Update display
   if(millis() - lastOLEDUpdate >= 500) {
     updateDisplayState();
     lastOLEDUpdate = millis();
   }
+  
+  // System status display
   if(millis() - lastStatusDisplay >= 10000) {
     if (!transferInProgress || (millis() - lastStatusDisplay >= 30000)) {
       printSystemStatus();
       lastStatusDisplay = millis();
     }
   }
+  
+  // Auto BLE transfer and health monitoring
   autoStartTransfer();
+  monitorSystemHealth();
   
   delay(10);
 }
