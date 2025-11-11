@@ -11,14 +11,12 @@
 #include <ArduinoJson.h>
 #include <esp_task_wdt.h>
 #include<time.h>
-
 // ============================================================================
 // CONFIGURABLE SETTINGS
 // ============================================================================
-#define DATA_LOG_INTERVAL 45000  // Change this value as needed (in milliseconds)
-#define WATCHDOG_TIMEOUT 30      // Watchdog timeout in seconds
-#define JSON_DOC_SIZE 1024       // Size for JSON document
-
+#define DATA_LOG_INTERVAL 45000  
+#define WATCHDOG_TIMEOUT 30      
+#define JSON_DOC_SIZE 1024
 // ============================================================================
 // OLED CONFIGURATION
 // ============================================================================
@@ -28,7 +26,6 @@
 #define OLED_SDA 8
 #define OLED_SCL 9
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
 // ============================================================================
 // SD CARD CONFIGURATION
 // ============================================================================
@@ -38,7 +35,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define SD_MISO 13
 bool sdOK = false;
 int fileCounter = 1;
-
 // ============================================================================
 // RS485 SOIL SENSOR CONFIGURATION (ZTS-3002)
 // ============================================================================
@@ -57,7 +53,6 @@ int fileCounter = 1;
 #define REG_NITROGEN       0x0006
 #define REG_PHOSPHORUS     0x0007
 #define REG_POTASSIUM      0x0008
-
 // ============================================================================
 // GPS CONFIGURATION
 // ============================================================================
@@ -66,12 +61,19 @@ int fileCounter = 1;
 #define GPS_TX_PIN 21
 TinyGPSPlus gps;
 unsigned long gpsCharsProcessed = 0;
-
 // ============================================================================
 // BUZZER CONFIGURATION
 // ============================================================================
 #define BUZZER_PIN 7
-int buzzerVolume = 180;
+#define BUZZER_CHANNEL 0
+#define BUZZER_RESOLUTION 8
+#define BUZZER_VOLUME 185  
+#define BUZZER_DEFAULT_FREQ 1000
+// --- Note Frequencies (for melodies) ---
+#define NOTE_C4 262
+#define NOTE_E4 330
+#define NOTE_G4 392
+#define NOTE_C5 523
 
 // ============================================================================
 // DISPLAY STATES
@@ -139,7 +141,6 @@ struct SensorData {
   bool basicValid = false;
   bool npkValid = false;
 };
-
 struct SystemStatus {
   bool oledOK = false;
   bool sdOK = false;
@@ -163,7 +164,7 @@ SensorData soilData;
 SystemStatus systemStatus;
 
 // ============================================================================
-// ANIMATION DATA
+// ANIMATION CODES
 // ============================================================================
 #define FRAME_SNOW_DELAY (42)
 #define FRAME_SNOW_WIDTH (64)
@@ -181,7 +182,6 @@ const byte PROGMEM frames_leaf[][512] = {
   {0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0,248,0,0,0,0,0,0,1,248,0,0,0,0,0,0,7,220,0,0,0,0,0,0,63,156,0,0,0,0,0,1,254,12,0,0,0,0,0,31,248,14,0,0,0,0,1,255,192,14,0,0,0,0,15,248,0,6,0,0,0,0,127,128,0,7,0,0,0,0,252,0,0,7,0,0,0,3,224,0,0,3,0,0,0,15,128,0,0,3,128,0,0,30,0,0,0,3,128,0,0,60,0,0,0,1,128,0,0,240,0,0,0,1,128,0,0,224,0,0,0,1,192,0,1,192,0,0,6,1,192,0,3,128,0,0,7,1,192,0,7,0,0,0,14,0,192,0,14,0,0,0,14,0,192,0,14,0,0,0,28,0,192,0,28,0,0,0,28,0,224,0,28,0,0,0,56,0,224,0,56,0,0,0,56,0,224,0,56,0,0,0,112,0,224,0,48,0,0,0,112,0,224,0,48,0,0,0,224,0,224,0,112,0,0,0,224,0,224,0,112,0,0,1,192,0,224,0,112,0,0,3,128,0,224,0,112,0,0,3,128,0,224,0,112,0,0,7,0,0,224,0,48,0,0,15,0,0,224,0,56,0,0,14,0,0,192,0,56,0,0,28,0,0,192,0,28,0,0,56,0,1,192,0,28,0,0,120,0,1,192,0,14,0,0,240,0,1,192,0,7,0,0,224,0,1,128,0,7,128,1,192,0,3,128,0,3,192,3,128,0,3,128,0,1,224,7,0,0,7,0,0,0,248,14,0,0,7,0,0,0,126,30,0,0,14,0,0,0,31,252,0,0,14,0,0,0,7,248,0,0,28,0,0,0,1,240,0,0,60,0,0,0,3,240,0,0,120,0,0,0,7,184,0,0,240,0,0,0,15,24,0,1,224,0,0,0,62,28,0,3,192,0,0,0,252,15,0,15,128,0,0,3,240,7,128,31,0,0,0,31,224,3,255,252,0,0,15,255,128,0,255,240,0,0,7,252,0,0,31,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
   {0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0,248,0,0,0,0,0,0,1,248,0,0,0,0,0,0,7,220,0,0,0,0,0,0,63,156,0,0,0,0,0,1,254,12,0,0,0,0,0,31,248,14,0,0,0,0,1,255,192,14,0,0,0,0,15,248,0,6,0,0,0,0,127,128,0,7,0,0,0,0,252,0,0,7,0,0,0,3,224,0,0,3,0,0,0,15,128,0,0,3,128,0,0,30,0,0,0,3,128,0,0,60,0,0,0,1,128,0,0,240,0,0,0,1,128,0,0,224,0,0,0,1,192,0,1,192,0,0,6,1,192,0,3,128,0,0,7,1,192,0,7,0,0,0,14,0,192,0,14,0,0,0,14,0,192,0,14,0,0,0,28,0,192,0,28,0,0,0,28,0,224,0,28,0,0,0,56,0,224,0,56,0,0,0,56,0,224,0,56,0,0,0,112,0,224,0,48,0,0,0,112,0,224,0,48,0,0,0,224,0,224,0,112,0,0,0,224,0,224,0,112,0,0,1,192,0,224,0,112,0,0,3,128,0,224,0,112,0,0,3,128,0,224,0,112,0,0,7,0,0,224,0,48,0,0,15,0,0,224,0,56,0,0,14,0,0,192,0,56,0,0,28,0,0,192,0,28,0,0,56,0,1,192,0,28,0,0,120,0,1,192,0,14,0,0,240,0,1,192,0,7,0,0,224,0,1,128,0,7,128,1,192,0,3,128,0,3,192,3,128,0,3,128,0,1,224,7,0,0,7,0,0,0,248,14,0,0,7,0,0,0,126,30,0,0,14,0,0,0,31,252,0,0,14,0,0,0,7,248,0,0,28,0,0,0,1,240,0,0,60,0,0,0,3,240,0,0,120,0,0,0,7,184,0,0,240,0,0,0,15,24,0,1,224,0,0,0,62,28,0,3,192,0,0,0,252,15,0,15,128,0,0,3,240,7,128,31,0,0,0,31,224,3,255,252,0,0,15,255,128,0,255,240,0,0,7,252,0,0,31,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
 };
-
 // ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
@@ -206,16 +206,39 @@ void recoverFromSoilSensorFailure();
 bool checkSDHealth();
 void monitorSystemHealth();
 void resetSoilSensor();
-
 // ============================================================================
 // BUZZER FUNCTIONS
 // ============================================================================
-void beep(int duration = 100) {
-  analogWrite(BUZZER_PIN, buzzerVolume);
+/**
+ * @brief The low-level helper function that plays any note.
+ */
+void playNote(int frequency, int duration) {
+  ledcSetup(BUZZER_CHANNEL, frequency, BUZZER_RESOLUTION);
+  ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
+  ledcWrite(BUZZER_CHANNEL, BUZZER_VOLUME);
   delay(duration);
-  analogWrite(BUZZER_PIN, 0);
+  ledcWrite(BUZZER_CHANNEL, 0);
+  ledcDetachPin(BUZZER_PIN);
 }
-
+/**
+ * @brief Your chosen success sound (Pattern 4: C-E-G-C5)
+ */
+void playSuccessSound() {
+  Serial.println("🔊 Playing Success Sound!");
+  playNote(NOTE_C4, 120);
+  delay(40);
+  playNote(NOTE_E4, 120);
+  delay(40);
+  playNote(NOTE_G4, 120);
+  delay(40);
+  playNote(NOTE_C5, 200);
+}
+/**
+ * @brief A simple beep for all other notifications.
+ */
+void beep(int duration = 100) {
+  playNote(BUZZER_DEFAULT_FREQ, duration);
+}
 // ============================================================================
 // OLED DISPLAY FUNCTIONS
 // ============================================================================
@@ -230,7 +253,6 @@ void initOLED() {
   systemStatus.oledOK = true;
   Serial.println("✅ OLED initialized");
 }
-
 void showInitialScreen() {
   if(!systemStatus.oledOK) return;
   display.clearDisplay();
@@ -245,7 +267,6 @@ void showInitialScreen() {
   display.println("Initializing...");
   display.display();
 }
-
 void showComponentCheckScreen() {
   if(!systemStatus.oledOK) return;
   display.clearDisplay();
@@ -260,7 +281,6 @@ void showComponentCheckScreen() {
   display.printf("BLE: %s\n", systemStatus.bleOK ? "OK" : "INVALID");
   display.display();
 }
-
 void showPlaceSensorScreen() {
   if(!systemStatus.oledOK) return;
   unsigned long currentTime = millis();
@@ -281,7 +301,6 @@ void showPlaceSensorScreen() {
   display.printf("Countdown: %d\n", remainingTime);
   display.display();
 }
-
 void showAnalyzingScreen() {
   if(!systemStatus.oledOK) return;
   unsigned long currentTime = millis();
@@ -303,7 +322,6 @@ void showAnalyzingScreen() {
   display.printf("Countdown: %d\n", remainingTime);
   display.display();
 }
-
 void showFileCreatedScreen() {
   if(!systemStatus.oledOK) return;
   
@@ -318,10 +336,8 @@ void showFileCreatedScreen() {
   display.println("Data saved to SD card");
   display.display();
 }
-
 void showBLETransferScreen() {
   if(!systemStatus.oledOK) return;
-  
   display.clearDisplay();
   display.setTextSize(1);
   display.setCursor(0,0);
@@ -334,7 +350,6 @@ void showBLETransferScreen() {
   display.println("in background");
   display.display();
 }
-
 void updateDisplayState() {
   static unsigned long lastUpdate = 0;
   // Only update display every second unless in analyzing state
@@ -342,7 +357,6 @@ void updateDisplayState() {
     return;
   }
   lastUpdate = millis();
-  
   switch(currentState) {
     case STATE_INITIAL:
       showInitialScreen();
@@ -364,7 +378,6 @@ void updateDisplayState() {
       break;
   }
 }
-
 bool isValidStateTransition(DisplayState from, DisplayState to) {
   switch (from) {
     case STATE_INITIAL:
@@ -383,13 +396,11 @@ bool isValidStateTransition(DisplayState from, DisplayState to) {
       return false;
   }
 }
-
 void changeState(DisplayState newState) {
   if (!isValidStateTransition(currentState, newState)) {
     Serial.printf("⚠️ Invalid state transition: %d -> %d\n", currentState, newState);
     return;
   }
-  
   currentState = newState;
   stateStartTime = millis();
   countdownStartTime = millis();
@@ -418,7 +429,6 @@ void playIntroAnimation() {
     delay(FRAME_LEAF_DELAY);
   }
 }
-
 // ============================================================================
 // SD CARD FUNCTIONS
 // ============================================================================
@@ -438,7 +448,6 @@ void initSDCard() {
   }
   systemStatus.sdOK = true;
 }
-
 bool checkSDHealth() {
   if (!systemStatus.sdOK) return false;
   
@@ -449,9 +458,6 @@ bool checkSDHealth() {
   }
   return true;
 }
-
-
-
 // ============================================================================
 // TIME CONVERSION HELPER
 // ============================================================================
@@ -467,47 +473,30 @@ bool checkSDHealth() {
 void getISTDateTime(int &ist_year, int &ist_month, int &ist_day, int &ist_hour, int &ist_minute) {
   // 1. Create a struct tm for the UTC time
   struct tm utc_tm;
-  utc_tm.tm_year = systemStatus.year - 1900;  // tm_year is years since 1900
-  utc_tm.tm_mon  = systemStatus.month - 1;    // tm_mon is 0-11
+  utc_tm.tm_year = systemStatus.year - 1900;  
+  utc_tm.tm_mon  = systemStatus.month - 1;
   utc_tm.tm_mday = systemStatus.day;
   utc_tm.tm_hour = systemStatus.hour;
   utc_tm.tm_min  = systemStatus.minute;
   utc_tm.tm_sec  = systemStatus.second;
-  utc_tm.tm_isdst = 0; // No daylight saving
-
-  // 2. Convert UTC struct tm to a time_t (Unix timestamp)
-  // --- FIX for 'timegm' is undefined ---
-  // We use mktime, but first, we set the local timezone to UTC.
-  // mktime assumes the input struct is "local time" and converts to UTC.
-  // By setting the timezone to UTC, we trick it into treating our UTC struct as "local".
-  
-  // Set Timezone to UTC
+  utc_tm.tm_isdst = 0; 
   setenv("TZ", "UTC", 1);
   tzset();
-
   time_t utc_time = mktime(&utc_tm);
-  
-  // --- End of Fix ---
-
-  // 3. Define the IST offset in seconds (5 hours * 3600s/hr) + (30 minutes * 60s/min)
+  // 2. Define the IST offset in seconds (5 hours * 3600s/hr) + (30 minutes * 60s/min)
   const long IST_OFFSET_SECONDS = 19800; // (5 * 3600) + (30 * 60)
-
-  // 4. Add the offset to get the IST time
+  // 3. Add the offset to get the IST time
   time_t ist_time = utc_time + IST_OFFSET_SECONDS;
-
-  // 5. Convert the IST timestamp back into a struct tm
+  // 4. Convert the IST timestamp back into a struct tm
   struct tm ist_tm;
   gmtime_r(&ist_time, &ist_tm); // Use gmtime_r for thread-safety
-
-  // 6. Assign the correct values to the output variables
+  // 5. Assign the correct values to the output variables
   ist_year   = ist_tm.tm_year + 1900;
   ist_month  = ist_tm.tm_mon + 1;
   ist_day    = ist_tm.tm_mday;
   ist_hour   = ist_tm.tm_hour;
   ist_minute = ist_tm.tm_min;
 }
-
-
 
 void clearSDCardData() {
   if(!systemStatus.sdOK) return;
@@ -544,34 +533,24 @@ String generateJSONData() {
     char time_utc[10];
     sprintf(time_utc, "%02d:%02d:%02d", systemStatus.hour, systemStatus.minute, systemStatus.second);
     doc["time_utc"] = time_utc;
-
-    // --- Get Correct IST Date & Time ---
     int ist_year, ist_month, ist_day, ist_hour, ist_minute;
     getISTDateTime(ist_year, ist_month, ist_day, ist_hour, ist_minute);
-
-    // --- Log IST Date ---
     char date_ist[12];
     sprintf(date_ist, "%04d-%02d-%02d", ist_year, ist_month, ist_day);
-    doc["date_ist"] = date_ist; // <-- NEW: Fixes ambiguity
-
-    // --- Log IST Time ---
+    doc["date_ist"] = date_ist;
     char time_ist[20];
-    // Use the 12-hour format
     int ist_hour_12 = ist_hour % 12;
-    if (ist_hour_12 == 0) ist_hour_12 = 12; // 0 o'clock is 12 AM
+    if (ist_hour_12 == 0) ist_hour_12 = 12;
     
     sprintf(time_ist, "%02d:%02d %s", ist_hour_12, ist_minute, ist_hour >= 12 ? "PM" : "AM");
     doc["time_ist"] = time_ist;
 
   } else {
-    // Default timestamp values
     doc["timestamp"] = "0000-00-00T00:00:00Z";
     doc["time_utc"] = "00:00:00";
-    doc["date_ist"] = "0000-00-00"; // <-- NEW
+    doc["date_ist"] = "0000-00-00";
     doc["time_ist"] = "00:00 AM";
   }
-  
-  // (Rest of your function is perfect)
   JsonObject location = doc["location"].to<JsonObject>();
   location["latitude"] = systemStatus.gpsFix ? systemStatus.latitude : 0.0;
   location["longitude"] = systemStatus.gpsFix ? systemStatus.longitude : 0.0;
@@ -596,7 +575,6 @@ String generateJSONData() {
   params["moisture"] = soilData.moisture;
   params["temperature"] = soilData.temperature;
   doc["sensor_valid"] = soilData.basicValid && soilData.npkValid;
-  
   String jsonString;
   serializeJson(doc, jsonString);
   return jsonString;
@@ -604,7 +582,6 @@ String generateJSONData() {
 
 void logDataToSD() {
   if(!systemStatus.sdOK || !checkSDHealth()) return;
-  
   String filename = "/farmland_data/farmland_" + String(fileCounter) + ".json";
   File file = SD.open(filename, FILE_WRITE);
   if(!file) {
@@ -615,7 +592,7 @@ void logDataToSD() {
   String jsonData = generateJSONData();
   file.print(jsonData);
   file.close();
-  
+  playSuccessSound();
   fileCounter++;
   Serial.println("✅ JSON data logged to SD card: " + filename);
   changeState(STATE_FILE_CREATED);
@@ -649,10 +626,8 @@ void resetSoilSensor() {
 
 void recoverFromSoilSensorFailure() {
   if (millis() - lastSensorReset < SENSOR_RESET_COOLDOWN) return;
-  
   soilSensorFailureCount++;
   Serial.printf("⚠️ Soil sensor failure count: %d/%d\n", soilSensorFailureCount, MAX_SENSOR_FAILURES);
-  
   if (soilSensorFailureCount >= MAX_SENSOR_FAILURES) {
     Serial.println("🔄 Attempting sensor recovery...");
     resetSoilSensor();
@@ -663,7 +638,6 @@ void recoverFromSoilSensorFailure() {
 bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *result) {
   uint8_t txBuf[8];
   uint8_t rxBuf[256];
-  
   int pos = 0;
   txBuf[pos++] = addr;
   txBuf[pos++] = 0x03;
@@ -674,7 +648,6 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
   uint16_t crc = crc16_modbus(txBuf, pos);
   txBuf[pos++] = (crc & 0xFF);
   txBuf[pos++] = (crc >> 8);
-  
   while(Serial1.available()) Serial1.read();
   digitalWrite(RS485_DE, HIGH);
   digitalWrite(RS485_RE, HIGH);
@@ -684,7 +657,6 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
   digitalWrite(RS485_DE, LOW);
   digitalWrite(RS485_RE, LOW);
   delay(10);  // FIX: Was 2
-  
   unsigned long startTime = millis();
   int rxLen = 0;
   while(millis() - startTime < MODBUS_TIMEOUT && rxLen < sizeof(rxBuf)) {
@@ -697,12 +669,10 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
       }
     }
   }
-  
   if(rxLen == 0) return false;
   uint16_t receivedCrc = (rxBuf[rxLen-1] << 8) | rxBuf[rxLen-2];
   uint16_t calculatedCrc = crc16_modbus(rxBuf, rxLen - 2);
   if(receivedCrc != calculatedCrc) return false;
-  
   for(int i = 0; i < regCount; i++) {
     result[i] = (rxBuf[3 + i*2] << 8) | rxBuf[4 + i*2];
   }
@@ -711,7 +681,6 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
 
 bool readSoilSensor() {
   uint16_t regs[4];
-  
   if(!modbusRead(MODBUS_ADDRESS, REG_MOISTURE, 4, regs)) {
     soilData.basicValid = false;
     recoverFromSoilSensorFailure();
@@ -736,7 +705,7 @@ bool readSoilSensor() {
   }
   
   systemStatus.soilSensorOK = soilData.basicValid;
-  soilSensorFailureCount = 0; // Reset counter on successful read
+  soilSensorFailureCount = 0;
   return soilData.basicValid;
 }
 
@@ -748,8 +717,6 @@ void updateGPS() {
     char c = GPS_SERIAL.read();
     gps.encode(c);
     gpsCharsProcessed++;
-    
-    // Prevent overflow
     if (gpsCharsProcessed > 10000) {
       gpsCharsProcessed = 100;
     }
@@ -782,7 +749,6 @@ void updateGPS() {
     systemStatus.gpsFix = false;
   }
 }
-
 // ============================================================================
 // BLE CALLBACKS
 // ============================================================================
@@ -830,7 +796,6 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     }
   }
 };
-
 // ============================================================================
 // BLE FILE TRANSFER (NON-BLOCKING)
 // ============================================================================
@@ -878,7 +843,7 @@ void processTransferChunk() {
         pFileTransferCharacteristic->setValue(completeMsg.c_str());
         pFileTransferCharacteristic->notify();
         Serial.println("🎉 ALL FILES TRANSFERRED SUCCESSFULLY!");
-        beep(300);
+        playSuccessSound();
         resetToNormalOperation();
       }
     } else {
@@ -917,7 +882,7 @@ void processTransferChunk() {
     
     // Move to next file
     transferInProgress = false;
-    transferPending = true; // Process next file in next iteration
+    transferPending = true; 
   }
   
   lastTransferChunkTime = millis();
@@ -1036,7 +1001,7 @@ void monitorSystemHealth() {
 void printSystemStatus() {
   Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
   Serial.println("║               🌱 AGNI SOIL SENSOR - SYSTEM STATUS              ║");
-  Serial.println("╠═══════════════════════════════════════════════════════════════╣");
+  Serial.println("╠══════════════════════════════════════════════════════==═════════╣");
   
   Serial.printf("║ 📊 OLED: %s  SD: %s  Soil: %s  GPS: %s              ║\n",
     systemStatus.oledOK ? "✅" : "❌",
@@ -1044,23 +1009,23 @@ void printSystemStatus() {
     systemStatus.soilSensorOK ? "✅" : "❌",
     systemStatus.gpsOK ? "✅" : "❌");
   
-  Serial.printf("║ 🔵 BLE: %s  🛰️  Fix: %s  📡 Satellites: %2d              ║\n",
+  Serial.printf("║ 🔵 BLE: %s  🛰️  Fix: %s  📡 Satellites: %2d                            ║\n",
     deviceConnected ? "🔗 Connected" : "📡 Advertising",
     systemStatus.gpsFix ? "✅" : "❌",
     systemStatus.satellites);
   
   if(soilData.basicValid) {
-    Serial.printf("║ 🌍 Soil - Moisture: %.1f%%  Temp: %.1f°C  pH: %.1f  EC: %duS/cm ║\n",
+    Serial.printf("║ 🌍 Soil - Moisture: %.1f%%  Temp: %.1f°C  pH: %.1f  EC: %duS/cm       ║\n",
       soilData.moisture, soilData.temperature, soilData.ph, soilData.conductivity);
     
     if(soilData.npkValid) {
-      Serial.printf("║ 🧪 NPK - N:%d  P:%d  K:%d mg/kg                              ║\n",
+      Serial.printf("║ 🧪 NPK - N:%d  P:%d  K:%d mg/kg                                     ║\n",
         soilData.nitrogen, soilData.phosphorus, soilData.potassium);
     }
   }
   
   if(systemStatus.gpsFix) {
-    Serial.printf("║ 📍 Location - Lat: %.6f  Lon: %.6f  Alt: %.1fm            ║\n",
+    Serial.printf("║ 📍 Location - Lat: %.6f  Lon: %.6f  Alt: %.1fm                        ║\n",
       systemStatus.latitude, systemStatus.longitude, systemStatus.altitude);
     
     char timestamp[25];
@@ -1070,12 +1035,12 @@ void printSystemStatus() {
     Serial.printf("║ ⏰ Timestamp: %s                    ║\n", timestamp);
   }
   
-  Serial.printf("║ 💾 Files Logged: %d                                           ║\n", fileCounter - 1);
-  Serial.printf("║ 🔄 Transfer State: %s                                  ║\n", 
+  Serial.printf("║ 💾 Files Logged: %d                                                     ║\n", fileCounter - 1);
+  Serial.printf("║ 🔄 Transfer State: %s                                                   ║\n", 
     transferInProgress ? "IN PROGRESS" : (transferPending ? "PENDING" : "IDLE"));
-  Serial.printf("║ 📊 Heap: %d bytes  Failures: %d                          ║\n", 
+  Serial.printf("║ 📊 Heap: %d bytes  Failures: %d                                         ║\n", 
     esp_get_free_heap_size(), soilSensorFailureCount);
-  Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+  Serial.println("╚═══════════════════════════════════════════════════════=========════════╝\n");
 }
 
 // ============================================================================
@@ -1087,34 +1052,26 @@ void setup() {
   
   Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
   Serial.println("║          🌱 AGNI SOIL SENSOR - COMPLETE INTEGRATED SYSTEM      ║");
-  Serial.println("║                  With Enhanced Reliability                    ║");
-  Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
+  Serial.println("║                  With Enhanced Reliability                     ║");
+  Serial.println("╚═════════════════════════════════════════════════════=══════════╝\n");
   
   // Initialize watchdog timer
   esp_task_wdt_init(WATCHDOG_TIMEOUT, true);
   esp_task_wdt_add(NULL);
-  
   // Buzzer init
-  pinMode(BUZZER_PIN, OUTPUT);
-  analogWrite(BUZZER_PIN, 0);
+  Serial.println("🔊 Initializing Buzzer...");
   beep(100);
-  
   Serial.println("🔧 Initializing components...\n");
-  
   // OLED - Initialize FIRST
   initOLED();
-  
   if (systemStatus.oledOK) {
     Serial.println("▶️  Playing intro animation...");
     playIntroAnimation();
   }
-  
   // Start with initial display state
   changeState(STATE_INITIAL);
-  
   // SD Card
   initSDCard();
-  
   // RS485 Soil Sensor
   pinMode(RS485_DE, OUTPUT);
   pinMode(RS485_RE, OUTPUT);
@@ -1122,38 +1079,26 @@ void setup() {
   digitalWrite(RS485_RE, LOW);
   Serial1.begin(MODBUS_BAUD, SERIAL_8N1, RS485_RX, RS485_TX);
   Serial.println("✅ RS485 Modbus initialized");
-  
   // GPS
   GPS_SERIAL.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   Serial.println("✅ GPS module initialized");
-  
   // BLE
   initializeBLE();
-  
-  beep(200);
-  delay(200);
-  beep(200);
-  
+  playSuccessSound();
   Serial.println("✅ All systems initialized successfully!");
   Serial.println("🚀 System ready - Starting sensor readings...\n");
-  
   updateDisplayState();
 }
-
 // ============================================================================
 // MAIN LOOP
 // ============================================================================
 void loop() {
-  // Reset watchdog timer
   esp_task_wdt_reset();
-  
   static unsigned long lastSoilRead = 0;
   static unsigned long lastStatusDisplay = 0;
   static unsigned long lastDataLog = 0;
   static unsigned long lastOLEDUpdate = 0;
   static bool initialReadDone = false;
-  
-  // Continuous GPS update
   updateGPS();
   
   // Handle BLE file transfer (non-blocking)
@@ -1228,7 +1173,6 @@ void loop() {
       lastStatusDisplay = millis();
     }
   }
-  
   // Auto BLE transfer and health monitoring
   autoStartTransfer();
   monitorSystemHealth();
