@@ -215,9 +215,11 @@ void resetSoilSensor();
  */
 void playNote(int frequency, int duration) {
   ledcSetup(BUZZER_CHANNEL, frequency, BUZZER_RESOLUTION);
+  ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
   ledcWrite(BUZZER_CHANNEL, BUZZER_VOLUME);
   delay(duration);
   ledcWrite(BUZZER_CHANNEL, 0);
+  ledcDetachPin(BUZZER_PIN);
 }
 /**
  * @brief Your chosen success sound (Pattern 4: C-E-G-C5)
@@ -1041,7 +1043,7 @@ void checkSoilSensorQueue() {
 void printSystemStatus() {
   Serial.println("\n╔═══════════════════════════════════════════════════════════════╗");
   Serial.println("║               🌱 AGNI SOIL SENSOR - SYSTEM STATUS              ║");
-  Serial.println("╠══════════════════════════════════════════════════════==═════════╣");
+  Serial.println("╠═══════════════════════════════════════════════════════════════╣");
   
   Serial.printf("║ 📊 OLED: %s  SD: %s  Soil: %s  GPS: %s              ║\n",
     systemStatus.oledOK ? "✅" : "❌",
@@ -1080,7 +1082,7 @@ void printSystemStatus() {
     transferInProgress ? "IN PROGRESS" : (transferPending ? "PENDING" : "IDLE"));
   Serial.printf("║ 📊 Heap: %d bytes  Failures: %d                                         ║\n", 
     esp_get_free_heap_size(), soilSensorFailureCount);
-  Serial.println("╚═══════════════════════════════════════════════════════=========════════╝\n");
+  Serial.println("╚═══════════════════════════════════════════════════════════════╝\n");
 }
 
 // ============================================================================
@@ -1101,7 +1103,6 @@ void setup() {
 
   // Buzzer init
   Serial.println("🔊 Initializing Buzzer...");
-  ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
   beep(100);
   Serial.println("🔧 Initializing components...\n");
 
@@ -1111,10 +1112,13 @@ void setup() {
     Serial.println("▶️  Playing intro animation...");
     playIntroAnimation();
   }
+
   // Start with initial display state
-  changeState(STATE_INITIAL);
+  // changeState(STATE_INITIAL);
+
   // SD Card
   initSDCard();
+
   // RS485 Soil Sensor
   pinMode(RS485_DE, OUTPUT);
   pinMode(RS485_RE, OUTPUT);
