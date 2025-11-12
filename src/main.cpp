@@ -162,6 +162,7 @@ struct SystemStatus {
 
 SensorData soilData;
 SystemStatus systemStatus;
+TaskHandle_t SoilSensorTask;
 
 // ============================================================================
 // ANIMATION CODES
@@ -214,11 +215,9 @@ void resetSoilSensor();
  */
 void playNote(int frequency, int duration) {
   ledcSetup(BUZZER_CHANNEL, frequency, BUZZER_RESOLUTION);
-  ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
   ledcWrite(BUZZER_CHANNEL, BUZZER_VOLUME);
   delay(duration);
   ledcWrite(BUZZER_CHANNEL, 0);
-  ledcDetachPin(BUZZER_PIN);
 }
 /**
  * @brief Your chosen success sound (Pattern 4: C-E-G-C5)
@@ -352,8 +351,15 @@ void showBLETransferScreen() {
 }
 void updateDisplayState() {
   static unsigned long lastUpdate = 0;
+  static DisplayState lastState = (DisplayState)99;
   // Only update display every second unless in analyzing state
   if (millis() - lastUpdate < 1000 && currentState != STATE_ANALYZING) {
+    return;
+  }
+  if (currentState != lastState) {
+    lastState = currentState; // Update the last known state
+  } else if (currentState != STATE_PLACE_SENSOR && currentState != STATE_ANALYZING) {
+    // If state is same, and not a countdown screen, skip redraw
     return;
   }
   lastUpdate = millis();
@@ -480,8 +486,8 @@ void getISTDateTime(int &ist_year, int &ist_month, int &ist_day, int &ist_hour, 
   utc_tm.tm_min  = systemStatus.minute;
   utc_tm.tm_sec  = systemStatus.second;
   utc_tm.tm_isdst = 0; 
-  setenv("TZ", "UTC", 1);
-  tzset();
+  // setenv("TZ", "UTC", 1);  suggesstion from chatGPT
+  // tzset();
   time_t utc_time = mktime(&utc_tm);
   // 2. Define the IST offset in seconds (5 hours * 3600s/hr) + (30 minutes * 60s/min)
   const long IST_OFFSET_SECONDS = 19800; // (5 * 3600) + (30 * 60)
@@ -489,7 +495,7 @@ void getISTDateTime(int &ist_year, int &ist_month, int &ist_day, int &ist_hour, 
   time_t ist_time = utc_time + IST_OFFSET_SECONDS;
   // 4. Convert the IST timestamp back into a struct tm
   struct tm ist_tm;
-  gmtime_r(&ist_time, &ist_tm); // Use gmtime_r for thread-safety
+  gmtime_r(&ist_time, &ist_tm);
   // 5. Assign the correct values to the output variables
   ist_year   = ist_tm.tm_year + 1900;
   ist_month  = ist_tm.tm_mon + 1;
@@ -507,7 +513,7 @@ void clearSDCardData() {
     while(file) {
       String fileName = file.name();
       if(!file.isDirectory()) {
-        SD.remove("/farmland_data/" + fileName);
+        SD.remove(fileName);
         Serial.println("Deleted: " + fileName);
       }
       file = root.openNextFile();
@@ -709,6 +715,25 @@ bool readSoilSensor() {
   return soilData.basicValid;
 }
 
+/**
+ * @brief This is the dedicated task that runs on Core 0
+ * to read the soil sensor without blocking the main loop.
+ */
+void soilSensorTaskLoop(void * pvParameters) {
+  Serial.println("✅ Soil Sensor Task started on Core 0");
+  for(;;) {
+    // Run the read function
+    if(readSoilSensor()) {
+      Serial.println("✅ (Core 0) Soil sensor data updated");
+    } else {
+      Serial.println("⚠️  (Core 0) Soil sensor reading failed");
+    }
+    
+    // Wait 5 seconds before the next read
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+  }
+}
+
 // ============================================================================
 // GPS FUNCTIONS
 // ============================================================================
@@ -820,6 +845,9 @@ void startDynamicFileTransfer() {
 
 void processTransferChunk() {
   if (!transferInProgress && transferPending) {
+    if(currentTransferFile) {
+      currentTransferFile.close();
+    }
     // Start new transfer
     transferInProgress = true;
     transferPending = false;
@@ -919,7 +947,7 @@ void formatSDCard() {
     while(file) {
       String fileName = file.name();
       if(!file.isDirectory()) {
-        SD.remove("/farmland_data/" + fileName);
+        SD.remove(fileName);
       }
       file = root.openNextFile();
     }
@@ -1058,10 +1086,13 @@ void setup() {
   // Initialize watchdog timer
   esp_task_wdt_init(WATCHDOG_TIMEOUT, true);
   esp_task_wdt_add(NULL);
+
   // Buzzer init
   Serial.println("🔊 Initializing Buzzer...");
+  ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
   beep(100);
   Serial.println("🔧 Initializing components...\n");
+
   // OLED - Initialize FIRST
   initOLED();
   if (systemStatus.oledOK) {
@@ -1079,6 +1110,17 @@ void setup() {
   digitalWrite(RS485_RE, LOW);
   Serial1.begin(MODBUS_BAUD, SERIAL_8N1, RS485_RX, RS485_TX);
   Serial.println("✅ RS485 Modbus initialized");
+  // Create the dedicated task for the blocking sensor
+  xTaskCreatePinnedToCore(
+      soilSensorTaskLoop,   /* Function to implement the task */
+      "SoilSensorTask",     /* Name of the task */
+      4096,                 /* Stack size in words */
+      NULL,                 /* Task input parameter */
+      1,                    /* Priority of the task */
+      &SoilSensorTask,      /* Task handle. */
+      0);                   /* Core where the task should run (0) */
+
+  delay(500); // Give the task a moment to start
   // GPS
   GPS_SERIAL.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
   Serial.println("✅ GPS module initialized");
@@ -1087,6 +1129,8 @@ void setup() {
   playSuccessSound();
   Serial.println("✅ All systems initialized successfully!");
   Serial.println("🚀 System ready - Starting sensor readings...\n");
+  setenv("TZ", "UTC", 1);
+  tzset(); // added suggestion from chatGPT
   updateDisplayState();
 }
 // ============================================================================
@@ -1145,21 +1189,6 @@ void loop() {
         break;
     }
   }
-  
-  // Read soil sensor every 5 seconds
-  if(millis() - lastSoilRead >= 5000) {
-    if(readSoilSensor()) {
-      if (!transferInProgress) {
-        Serial.println("✅ Soil sensor data updated");
-      }
-    } else {
-      if (!transferInProgress) {
-        Serial.println("⚠️  Soil sensor reading failed");
-      }
-    }
-    lastSoilRead = millis();
-  }
-  
   // Update display
   if(millis() - lastOLEDUpdate >= 500) {
     updateDisplayState();
