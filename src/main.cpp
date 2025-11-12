@@ -117,7 +117,7 @@ String currentTransferFileName;
 size_t currentTransferBytesSent = 0;
 size_t currentTransferFileSize = 0;
 unsigned long lastTransferChunkTime = 0;
-const size_t TRANSFER_CHUNK_SIZE = 128;
+const size_t TRANSFER_CHUNK_SIZE = 256;   // changed from 128 for faster transfer
 
 // ============================================================================
 // ERROR RECOVERY VARIABLES
@@ -163,7 +163,7 @@ struct SystemStatus {
 SensorData soilData;
 SystemStatus systemStatus;
 TaskHandle_t SoilSensorTask;
-
+QueueHandle_t soilDataQueue;
 // ============================================================================
 // ANIMATION CODES
 // ============================================================================
@@ -685,7 +685,7 @@ bool modbusRead(uint8_t addr, uint16_t startReg, uint16_t regCount, uint16_t *re
   return true;
 }
 
-bool readSoilSensor() {
+bool readSoilSensor(SensorData &soilData) {
   uint16_t regs[4];
   if(!modbusRead(MODBUS_ADDRESS, REG_MOISTURE, 4, regs)) {
     soilData.basicValid = false;
@@ -709,8 +709,6 @@ bool readSoilSensor() {
   } else {
     soilData.npkValid = false;
   }
-  
-  systemStatus.soilSensorOK = soilData.basicValid;
   soilSensorFailureCount = 0;
   return soilData.basicValid;
 }
@@ -721,15 +719,15 @@ bool readSoilSensor() {
  */
 void soilSensorTaskLoop(void * pvParameters) {
   Serial.println("✅ Soil Sensor Task started on Core 0");
+  SensorData localSensorData;
   for(;;) {
-    // Run the read function
-    if(readSoilSensor()) {
+    bool readOK = readSoilSensor(localSensorData);
+    if(readOK) {
       Serial.println("✅ (Core 0) Soil sensor data updated");
+      xQueueOverwrite(soilDataQueue, &localSensorData);
     } else {
       Serial.println("⚠️  (Core 0) Soil sensor reading failed");
     }
-    
-    // Wait 5 seconds before the next read
     vTaskDelay(5000 / portTICK_PERIOD_MS);
   }
 }
@@ -1023,6 +1021,20 @@ void monitorSystemHealth() {
   lastHealthCheck = millis();
 }
 
+/**
+ * @brief Checks the FreeRTOS queue for new sensor data from Core 0.
+ * This is non-blocking and 100% thread-safe.
+ */
+void checkSoilSensorQueue() {
+  SensorData newData;
+  // Check if there is data in the queue (non-blocking)
+  if (xQueueReceive(soilDataQueue, &newData, 0) == pdPASS) {
+    soilData = newData; // This is a safe copy on Core 1
+    systemStatus.soilSensorOK = soilData.basicValid;
+    Serial.println("✅ (Core 1) Received new soil data from queue.");
+  }
+}
+
 // ============================================================================
 // SYSTEM STATUS DISPLAY
 // ============================================================================
@@ -1110,6 +1122,13 @@ void setup() {
   digitalWrite(RS485_RE, LOW);
   Serial1.begin(MODBUS_BAUD, SERIAL_8N1, RS485_RX, RS485_TX);
   Serial.println("✅ RS485 Modbus initialized");
+  // Create a queue to safely pass sensor data from Core 0 to Core 1
+soilDataQueue = xQueueCreate(1, sizeof(SensorData));
+if (soilDataQueue == NULL) {
+  Serial.println("❌ Failed to create soilDataQueue!");
+} else {
+  Serial.println("✅ soilDataQueue created successfully");
+}
   // Create the dedicated task for the blocking sensor
   xTaskCreatePinnedToCore(
       soilSensorTaskLoop,   /* Function to implement the task */
@@ -1144,6 +1163,7 @@ void loop() {
   static unsigned long lastOLEDUpdate = 0;
   static bool initialReadDone = false;
   updateGPS();
+  checkSoilSensorQueue();
   
   // Handle BLE file transfer (non-blocking)
   if (transferInProgress || transferPending) {
