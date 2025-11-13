@@ -119,6 +119,8 @@ size_t currentTransferFileSize = 0;
 unsigned long lastTransferChunkTime = 0;
 const size_t TRANSFER_CHUNK_SIZE = 256;   // changed from 128 for faster transfer
 
+DisplayState previousStateBeforeTransfer = STATE_PLACE_SENSOR;
+volatile int g_bleCommandToProcess = 0; // 0=None, 1=Start_Transfer, 2=Format, 3=Reset
 // ============================================================================
 // ERROR RECOVERY VARIABLES
 // ============================================================================
@@ -425,58 +427,56 @@ void changeState(DisplayState newState) {
 // ============================================================================
 void playIntroAnimation() {
   if(!systemStatus.oledOK) return;
+
+  unsigned long animationStartTime = 0;
+  unsigned long lastFrameTime = 0;
+  int currentFrame = 0;
+
+  // --- 1. Play "Agni" (Fire) Animation for 2 seconds ---
+  Serial.println("▶️  Playing intro animation 1 (Agni)...");
+  animationStartTime = millis(); 
   
-  static unsigned long animationStartTime = 0;
-  static int currentAnimation = 0; 
-  static int currentFrame = 0;
-  static bool firstRun = true;
-  
-  if(firstRun) {
-    animationStartTime = millis();
-    firstRun = false;
-    Serial.println("🔥 Starting AGNI Fire Animation...");
+  // This 'while' loop will run for 2000ms (2 seconds)
+
+  while(millis() - animationStartTime < 2000) { 
+    if (millis() - lastFrameTime > FRAME_FIRE_DELAY) {
+      lastFrameTime = millis();
+      
+      display.clearDisplay();
+      display.drawBitmap(32, 0, frames_fire[currentFrame], FRAME_FIRE_WIDTH, FRAME_FIRE_HEIGHT, SSD1306_WHITE);
+      display.display();
+      currentFrame = (currentFrame + 1) % FRAME_FIRE_COUNT; 
+    }
+    
+    // Pet the watchdog and yield to the OS
+    esp_task_wdt_reset(); 
+    delay(1); 
+  }
+
+  // --- 2. Play "Leaf" Animation for 1.5 seconds ---
+  Serial.println("▶️  Playing intro animation 2 (Leaf)...");
+  animationStartTime = millis(); 
+  currentFrame = 0; 
+  lastFrameTime = 0; 
+
+  // This 'while' loop will run for 1500ms (1.5 seconds)
+  while(millis() - animationStartTime < 1500) { 
+    
+    if (millis() - lastFrameTime > FRAME_LEAF_DELAY) {
+      lastFrameTime = millis();
+      
+      display.clearDisplay();
+      display.drawBitmap(32, 0, frames_leaf[currentFrame], FRAME_LEAF_WIDTH, FRAME_LEAF_HEIGHT, SSD1306_WHITE);
+      display.display();
+      
+      currentFrame = (currentFrame + 1) % FRAME_LEAF_COUNT; 
+    }
+    
+    esp_task_wdt_reset(); 
+    delay(1); 
   }
   
-  unsigned long currentTime = millis();
-  unsigned long elapsed = currentTime - animationStartTime;
-  
-  switch(currentAnimation) {
-    case 0:
-      if(elapsed < 2000) {
-        display.clearDisplay();
-        display.drawBitmap(32, 0, frames_fire[currentFrame], FRAME_FIRE_WIDTH, FRAME_FIRE_HEIGHT, SSD1306_WHITE);
-        display.display();
-        
-        if(currentTime % FRAME_FIRE_DELAY < 10) {
-          currentFrame = (currentFrame + 1) % FRAME_FIRE_COUNT;
-        }
-      } else {
-        currentAnimation = 1;
-        animationStartTime = currentTime;
-        currentFrame = 0;
-        Serial.println("🍃 Starting Leaf Animation...");
-      }
-      break;
-      
-    case 1:
-      if(elapsed < 1500) {
-        display.clearDisplay();
-        display.drawBitmap(32, 0, frames_leaf[currentFrame], FRAME_LEAF_WIDTH, FRAME_LEAF_HEIGHT, SSD1306_WHITE);
-        display.display();
-        if(currentTime % FRAME_LEAF_DELAY < 10) {
-          currentFrame = (currentFrame + 1) % FRAME_LEAF_COUNT;
-        }
-      } else {
-        currentAnimation = 2;
-        display.clearDisplay();
-        display.display();
-        Serial.println("✅ Intro animations completed");
-      }
-      break;
-      
-    case 2: 
-      break;
-  }
+  Serial.println("✅ Intro animations completed");
 }
 // ============================================================================
 // SD CARD FUNCTIONS
@@ -491,11 +491,12 @@ void initSDCard() {
   uint8_t cardType = SD.cardType();
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   Serial.printf("✅ SD Card initialized: %llu MB\n", cardSize);
-  clearSDCardData();
+  // clearSDCardData();
   if(!SD.exists("/farmland_data")) {
     SD.mkdir("/farmland_data");
   }
   systemStatus.sdOK = true;
+  findLastFileCounter();
 }
 bool checkSDHealth() {
   if (!systemStatus.sdOK) return false;
@@ -507,6 +508,53 @@ bool checkSDHealth() {
   }
   return true;
 }
+
+/**
+ * @brief Scans the /farmland_data directory to find the highest file number.
+ * Sets the global 'fileCounter' to the next available number.
+ */
+void findLastFileCounter() {
+  if (!systemStatus.sdOK) return;
+
+  File root = SD.open("/farmland_data");
+  if (!root) {
+    Serial.println("❌ Failed to open /farmland_data to find last file.");
+    fileCounter = 1;
+    return;
+  }
+
+  int maxFileNum = 0;
+  File file = root.openNextFile();
+  while (file) {
+    if (!file.isDirectory()) {
+      // file.name() returns the full path, e.g., /farmland_data/farmland_12.json
+      String fileName = file.name(); 
+      // Get just the filename part: farmland_12.json
+      String baseName = fileName.substring(fileName.lastIndexOf('/') + 1); 
+
+      if (baseName.startsWith("farmland_") && baseName.endsWith(".json")) {
+        // Extract the number part: "12"
+        String numStr = baseName.substring(
+          baseName.indexOf('_') + 1, 
+          baseName.lastIndexOf('.')
+        );
+
+        int fileNum = numStr.toInt();
+        if (fileNum > maxFileNum) {
+          maxFileNum = fileNum;
+        }
+      }
+    }
+    file.close();
+    file = root.openNextFile();
+  }
+  root.close();
+
+  fileCounter = maxFileNum + 1; // Start at the next number
+  Serial.printf("✅ SD Scan: Resuming from file number %d\n", fileCounter);
+}
+
+
 // ============================================================================
 // TIME CONVERSION HELPER
 // ============================================================================
@@ -635,7 +683,7 @@ String generateJSONData() {
     doc["date_ist"] = "0000-00-00";
     doc["time_ist"] = "00:00 AM";
   }
-  JsonObject location = doc["location"].to<JsonObject>();
+  JsonObject location = doc.createNestedObject("location");
   location["latitude"] = systemStatus.gpsFix ? systemStatus.latitude : 0.0;
   location["longitude"] = systemStatus.gpsFix ? systemStatus.longitude : 0.0;
   location["valid"] = systemStatus.gpsFix;
@@ -650,7 +698,7 @@ String generateJSONData() {
   else if(soilData.ph < 8.5) doc["ph_category"] = "slightly_alkaline";
   else doc["ph_category"] = "alkaline";
   
-  JsonObject params = doc["parameters"].to<JsonObject>();
+  JsonObject params = doc.createNestedObject("parameters");
   params["ph_value"] = soilData.ph;
   params["conductivity"] = soilData.conductivity;
   params["nitrogen"] = soilData.nitrogen;
@@ -799,6 +847,7 @@ void soilSensorTaskLoop(void * pvParameters) {
   Serial.println("✅ Soil Sensor Task started on Core 0");
   SensorData localSensorData;
   for(;;) {
+    esp_task_wdt_reset(); // Reset watchdog timer
     bool readOK = readSoilSensor(localSensorData);
     if(readOK) {
       Serial.println("✅ (Core 0) Soil sensor data updated");
@@ -882,17 +931,13 @@ class CommandCallbacks : public BLECharacteristicCallbacks {
     if (value.length() > 0) {
       String command = String(value.c_str());
       Serial.println("📬 BLE Command received: " + command);
-      
+      // Set a flag instead of calling function directly
       if (command == "START_TRANSFER") {
-        startDynamicFileTransfer();
+        g_bleCommandToProcess = 1;
       } else if (command == "FORMAT_SD") {
-        formatSDCard();
-        pCommandCharacteristic->setValue("SD_FORMATTED");
-        pCommandCharacteristic->notify();
+        g_bleCommandToProcess = 2;
       } else if (command == "RESET_SYSTEM") {
-        resetToNormalOperation();
-        pCommandCharacteristic->setValue("SYSTEM_RESET");
-        pCommandCharacteristic->notify();
+        g_bleCommandToProcess = 3;
       }
     }
   }
@@ -1112,6 +1157,41 @@ void checkSoilSensorQueue() {
   }
 }
 
+/**
+ * @brief Safely handles commands from the BLE task in the main loop.
+ */
+void handleBleCommands() {
+  if (g_bleCommandToProcess == 0) return; // No command
+
+  // Safely copy the command and clear the flag
+  int command = g_bleCommandToProcess;
+  g_bleCommandToProcess = 0;
+
+  Serial.printf("⚡ Executing BLE command: %d\n", command);
+
+  switch (command) {
+    case 1: // START_TRANSFER
+      if (!transferInProgress && !transferPending) {
+        startDynamicFileTransfer();
+      }
+      break;
+    case 2: // FORMAT_SD
+      formatSDCard();
+      if(pCommandCharacteristic) {
+        pCommandCharacteristic->setValue("SD_FORMATTED");
+        pCommandCharacteristic->notify();
+      }
+      break;
+    case 3: // RESET_SYSTEM
+      resetToNormalOperation();
+      if(pCommandCharacteristic) {
+        pCommandCharacteristic->setValue("SYSTEM_RESET");
+        pCommandCharacteristic->notify();
+      }
+      break;
+  }
+}
+
 // ============================================================================
 // SYSTEM STATUS DISPLAY
 // ============================================================================
@@ -1216,8 +1296,10 @@ if (soilDataQueue == NULL) {
       NULL,                 /* Task input parameter */
       1,                    /* Priority of the task */
       &SoilSensorTask,      /* Task handle. */
-      0);                   /* Core where the task should run (0) */
-
+      0);   
+    if (SoilSensorTask) {
+      esp_task_wdt_add(SoilSensorTask); // <-- ADD THIS LINE
+      }                 
   delay(500); // Give the task a moment to start
   // GPS
   GPS_SERIAL.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
@@ -1243,6 +1325,8 @@ void loop() {
   static bool initialReadDone = false;
   updateGPS();
   checkSoilSensorQueue();
+  // Below line is added for non freez of BLE transfer
+  handleBleCommands();
   
   // Handle BLE file transfer (non-blocking)
   if (transferInProgress || transferPending) {
