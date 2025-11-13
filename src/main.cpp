@@ -103,7 +103,6 @@ bool oldDeviceConnected = false;
 bool transferInProgress = false;
 bool transferPending = false;
 DisplayState previousStateBeforeTransfer = STATE_PLACE_SENSOR;
-
 #define SERVICE_UUID "12345678-1234-1234-1234-123456789abc"
 #define CHARACTERISTIC_UUID_TRANSFER "abcdef12-3456-7890-1234-567890abcdef"
 #define CHARACTERISTIC_UUID_COMMAND "abcdef13-3456-7890-1234-567890abcdef"
@@ -118,8 +117,6 @@ size_t currentTransferBytesSent = 0;
 size_t currentTransferFileSize = 0;
 unsigned long lastTransferChunkTime = 0;
 const size_t TRANSFER_CHUNK_SIZE = 256;   // changed from 128 for faster transfer
-
-DisplayState previousStateBeforeTransfer = STATE_PLACE_SENSOR;
 volatile int g_bleCommandToProcess = 0; // 0=None, 1=Start_Transfer, 2=Format, 3=Reset
 // ============================================================================
 // ERROR RECOVERY VARIABLES
@@ -212,6 +209,7 @@ void recoverFromSoilSensorFailure();
 bool checkSDHealth();
 void monitorSystemHealth();
 void resetSoilSensor();
+void findLastFileCounter();
 // ============================================================================
 // BUZZER FUNCTIONS
 // ============================================================================
@@ -651,7 +649,7 @@ void clearSDCardData() {
 }
 
 String generateJSONData() {
-  StaticJsonDocument<JSON_DOC_SIZE> doc;
+  JsonDocument doc;
   doc["id"] = fileCounter;
   
   if(systemStatus.gpsFix) {
@@ -683,7 +681,7 @@ String generateJSONData() {
     doc["date_ist"] = "0000-00-00";
     doc["time_ist"] = "00:00 AM";
   }
-  JsonObject location = doc.createNestedObject("location");
+  JsonObject location = doc["location"].to<JsonObject>();
   location["latitude"] = systemStatus.gpsFix ? systemStatus.latitude : 0.0;
   location["longitude"] = systemStatus.gpsFix ? systemStatus.longitude : 0.0;
   location["valid"] = systemStatus.gpsFix;
@@ -698,7 +696,7 @@ String generateJSONData() {
   else if(soilData.ph < 8.5) doc["ph_category"] = "slightly_alkaline";
   else doc["ph_category"] = "alkaline";
   
-  JsonObject params = doc.createNestedObject("parameters");
+  JsonObject params = doc["parameters"].to<JsonObject>();
   params["ph_value"] = soilData.ph;
   params["conductivity"] = soilData.conductivity;
   params["nitrogen"] = soilData.nitrogen;
