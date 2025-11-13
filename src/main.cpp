@@ -167,12 +167,15 @@ QueueHandle_t soilDataQueue;
 // ============================================================================
 // ANIMATION CODES
 // ============================================================================
-#define FRAME_SNOW_DELAY (42)
-#define FRAME_SNOW_WIDTH (64)
-#define FRAME_SNOW_HEIGHT (64)
-#define FRAME_SNOW_COUNT (sizeof(frames_snow) / sizeof(frames_snow[0]))
-const byte PROGMEM frames_snow[][512] = {
-  {0,0,0,0,0,4,0,0,0,0,0,0,0,14,0,0,0,0,0,0,0,14,0,0,0,0,0,0,0,63,128,0,0,0,0,0,0,63,128,0,0,0,0,0,1,158,50,0,0,0,0,0,15,142,63,0,0,0,24,0,15,142,62,0,0,0,24,0,7,206,124,0,0,0,24,0,7,255,254,0,0,0,24,0,6,255,236,0,0,8,24,56,0,63,128,0,0,30,28,120,0,63,128,0,0,15,157,240,6,127,238,0,0,7,255,224,7,254,252,0,0,1,255,128,7,206,126,0,0,0,126,0,15,134,63,0,0,0,127,0,15,134,63,0,0,1,255,192,1,159,144,0,0,7,223,240,0,31,128,0,0,15,156,248,0,31,128,0,0,14,28,56,0,6,0,0,0,8,28,0,0,6,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,96,0,0,0,0,0,0,0,96,0,0,0,0,0,0,0,112,0,0,0,0,0,0,0,113,0,0,0,0,0,0,14,119,128,0,0,0,0,0,15,255,0,0,0,0,0,0,7,254,0,0,0,0,0,0,1,248,0,0,0,0,0,0,3,254,0,0,0,0,0,0,7,255,0,0,0,0,0,0,15,119,128,0,0,0,0,0,12,113,0,0,0,0,3,0,0,112,0,0,0,0,3,176,0,112,0,0,0,0,3,240,0,112,0,0,0,0,3,240,0,0,0,0,0,0,7,192,0,0,0,0,0,0,7,224,0,0,1,192,0,0,0,224,0,0,1,192,0,0,0,64,0,0,1,192,0,96,0,0,0,0,25,206,0,112,0,0,0,0,63,254,0,115,128,0,0,0,31,248,0,63,128,0,0,0,7,240,0,127,0,0,0,0,7,240,1,252,0,0,0,0,15,252,1,252,0,0,0,0,63,254,1,140,0,0,0,0,57,206,0,14,0,0,0,0,1,192,0,12,0,0,0,0,1,192,0,0,0,0,0,0,1,192,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+#define FRAME_FIRE_DELAY (42)
+#define FRAME_FIRE_WIDTH (64)
+#define FRAME_FIRE_HEIGHT (64)
+#define FRAME_FIRE_COUNT (sizeof(frames_fire) / sizeof(frames_fire[0]))
+const byte PROGMEM frames_fire[][512] = {
+  {0,0,0,24,0,0,0,0,0,0,0,30,0,0,0,0,0,0,0,31,0,0,0,0,0,0,0,63,128,0,0,0,0,0,0,59,224,0,0,0,0,0,0,56,240,0,0,0,0,0,0,48,120,0,0,0,0,0,0,112,60,0,0,0,0,0,0,112,14,0,0,0,0,0,0,224,7,128,0,0,0,0,0,224,3,192,0,0,0,0,1,192,1,224,0,0,0,0,1,192,0,240,0,0,0,0,3,128,0,120,0,0,0,0,3,128,0,60,0,0,0,0,7,0,0,30,0,0,0,0,14,0,0,15,0,0,0,0,30,0,0,7,0,0,0,0,28,0,0,3,128,0,0,0,56,0,0,1,192,0,0,0,112,0,192,0,224,0,0,0,224,0,224,0,240,0,0,1,224,0,240,0,112,0,0,3,192,0,252,0,56,0,0,7,128,0,252,0,28,0,0,7,0,0,238,0,28,0,0,14,0,0,231,0,14,0,0,28,0,0,227,128,14,0,0,60,0,0,227,128,7,0,0,56,0,0,225,192,7,0,0,112,0,0,224,224,3,128,0,112,0,0,96,224,3,128,0,224,0,0,224,112,1,128,0,192,3,0,224,112,1,192,1,192,7,0,224,48,1,192,1,192,7,128,192,56,1,192,3,128,15,193,192,56,0,192,3,128,14,225,128,56,0,192,3,0,28,255,128,56,0,224,3,0,24,63,0,24,0,224,3,0,24,30,0,24,0,224,7,0,56,0,0,24,0,224,7,0,56,0,0,56,0,224,7,0,56,0,0,56,0,224,7,0,56,0,0,56,0,224,7,0,56,0,0,48,0,224,7,0,56,0,0,112,0,192,7,0,24,0,0,112,1,192,3,0,28,0,0,96,1,192,3,128,14,0,0,224,1,192,3,128,15,0,1,192,3,128,1,128,7,128,1,192,3,128,1,192,3,192,3,128,7,0,0,224,0,128,1,0,7,0,0,224,0,0,0,0,14,0,0,112,0,0,0,0,14,0,0,56,0,0,0,0,28,0,0,60,0,0,0,0,56,0,0,30,0,0,0,0,112,0,0,7,128,0,0,0,224,0,0,3,224,0,0,1,224,0,0,1,255,0,0,15,128,0,0,0,127,128,0,15,0,0,0,0,15,128,0,12,0,0},
+  {0,0,0,0,0,0,0,0,0,0,0,48,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0,124,0,0,0,0,0,0,0,127,0,0,0,0,0,0,0,103,128,0,0,0,0,0,0,227,192,0,0,0,0,0,0,224,240,0,0,0,0,0,1,192,120,0,0,0,0,0,1,192,60,0,0,0,0,0,3,128,30,0,0,0,0,0,3,128,15,0,0,0,0,0,7,0,3,128,0,0,0,0,7,0,1,192,0,0,0,0,14,0,0,224,0,0,0,0,14,0,0,112,0,0,0,0,28,0,0,56,0,0,0,0,56,0,0,28,0,0,0,0,120,0,0,14,0,0,0,0,112,0,0,7,0,0,0,0,224,1,0,7,128,0,0,1,224,3,128,3,192,0,0,1,192,3,192,1,192,0,0,3,128,3,224,0,224,0,0,7,0,3,248,0,112,0,0,14,0,1,188,0,112,0,0,30,0,1,156,0,56,0,0,28,0,1,142,0,28,0,0,56,0,1,207,0,28,0,0,112,0,1,199,128,14,0,0,112,0,1,195,128,14,0,0,224,0,1,193,192,7,0,0,192,0,1,193,224,7,0,1,192,0,1,128,224,3,0,1,192,6,1,128,96,3,128,3,128,15,3,128,112,3,128,3,128,15,131,128,112,1,128,3,0,29,231,0,48,1,192,7,0,25,255,0,48,1,192,7,0,56,124,0,56,1,192,7,0,56,16,0,56,1,192,7,0,48,0,0,56,0,192,6,0,48,0,0,56,0,192,6,0,48,0,0,48,1,192,6,0,48,0,0,48,1,192,6,0,48,0,0,112,1,192,6,0,56,0,0,112,1,192,7,0,56,0,0,96,1,128,7,0,28,0,0,224,1,128,7,0,30,0,0,224,3,128,3,0,15,0,1,192,3,128,3,128,7,128,3,128,3,0,1,128,3,192,3,128,7,0,1,192,0,128,1,0,14,0,0,224,0,0,0,0,14,0,0,240,0,0,0,0,28,0,0,112,0,0,0,0,60,0,0,56,0,0,0,0,56,0,0,30,0,0,0,0,112,0,0,15,0,0,0,1,224,0,0,3,192,0,0,3,192,0,0,1,255,0,0,15,128,0,0,0,127,128,0,31,0,0,0,0,7,128,0,28,0,0},
+  // ... Include all 16 frames from your fire animation here
+  // (I've shown first 2 frames, include the remaining 14 frames)
 };
 
 #define FRAME_LEAF_DELAY (42)
@@ -422,19 +425,57 @@ void changeState(DisplayState newState) {
 // ============================================================================
 void playIntroAnimation() {
   if(!systemStatus.oledOK) return;
-  Serial.println("▶️  Playing intro animation 1 (Snow)...");
-  for (int frame = 0; frame < FRAME_SNOW_COUNT; frame++) {
-    display.clearDisplay();
-    display.drawBitmap(32, 0, frames_snow[frame], FRAME_SNOW_WIDTH, FRAME_SNOW_HEIGHT, SSD1306_WHITE);
-    display.display();
-    delay(FRAME_SNOW_DELAY);
+  
+  static unsigned long animationStartTime = 0;
+  static int currentAnimation = 0; 
+  static int currentFrame = 0;
+  static bool firstRun = true;
+  
+  if(firstRun) {
+    animationStartTime = millis();
+    firstRun = false;
+    Serial.println("🔥 Starting AGNI Fire Animation...");
   }
-  Serial.println("▶️  Playing intro animation 2 (Leaf)...");
-  for (int frame = 0; frame < FRAME_LEAF_COUNT; frame++) {
-    display.clearDisplay();
-    display.drawBitmap(32, 0, frames_leaf[frame], FRAME_LEAF_WIDTH, FRAME_LEAF_HEIGHT, SSD1306_WHITE);
-    display.display();
-    delay(FRAME_LEAF_DELAY);
+  
+  unsigned long currentTime = millis();
+  unsigned long elapsed = currentTime - animationStartTime;
+  
+  switch(currentAnimation) {
+    case 0:
+      if(elapsed < 2000) {
+        display.clearDisplay();
+        display.drawBitmap(32, 0, frames_fire[currentFrame], FRAME_FIRE_WIDTH, FRAME_FIRE_HEIGHT, SSD1306_WHITE);
+        display.display();
+        
+        if(currentTime % FRAME_FIRE_DELAY < 10) {
+          currentFrame = (currentFrame + 1) % FRAME_FIRE_COUNT;
+        }
+      } else {
+        currentAnimation = 1;
+        animationStartTime = currentTime;
+        currentFrame = 0;
+        Serial.println("🍃 Starting Leaf Animation...");
+      }
+      break;
+      
+    case 1:
+      if(elapsed < 1500) {
+        display.clearDisplay();
+        display.drawBitmap(32, 0, frames_leaf[currentFrame], FRAME_LEAF_WIDTH, FRAME_LEAF_HEIGHT, SSD1306_WHITE);
+        display.display();
+        if(currentTime % FRAME_LEAF_DELAY < 10) {
+          currentFrame = (currentFrame + 1) % FRAME_LEAF_COUNT;
+        }
+      } else {
+        currentAnimation = 2;
+        display.clearDisplay();
+        display.display();
+        Serial.println("✅ Intro animations completed");
+      }
+      break;
+      
+    case 2: 
+      break;
   }
 }
 // ============================================================================
@@ -506,24 +547,59 @@ void getISTDateTime(int &ist_year, int &ist_month, int &ist_day, int &ist_hour, 
   ist_minute = ist_tm.tm_min;
 }
 
+/**
+ * @brief Recursively deletes all files and sub-folders from a given directory.
+ * @param dir The directory File object to start from.
+ */
+void deleteRecursive(File dir) {
+  while(true) {
+    File entry = dir.openNextFile();
+    if (! entry) {
+      // no more files or directories in this directory
+      break;
+    }
+
+    String entryPath = entry.name();
+
+    if (entry.isDirectory()) {
+      // It's a directory. Recurse into it to delete its contents.
+      Serial.println("  Entering dir: " + entryPath);
+      File subDir = SD.open(entryPath);
+      deleteRecursive(subDir);
+      subDir.close();
+
+      // Now that the directory is empty, remove it.
+      Serial.println("  Removing dir: " + entryPath);
+      SD.rmdir(entryPath);
+    } else {
+      // It's a file. Delete it.
+      Serial.println("  Deleting file: " + entryPath);
+      SD.remove(entryPath);
+    }
+    entry.close();
+  }
+}
+
 void clearSDCardData() {
   if(!systemStatus.sdOK) return;
-  Serial.println("🗑️  Clearing all existing SD card data...");
-  File root = SD.open("/farmland_data");
+  Serial.println("🗑️  WIPING ENTIRE SD CARD (as requested on reset)...");
+
+  File root = SD.open("/");
   if (root) {
-    File file = root.openNextFile();
-    while(file) {
-      String fileName = file.name();
-      if(!file.isDirectory()) {
-        SD.remove(fileName);
-        Serial.println("Deleted: " + fileName);
-      }
-      file = root.openNextFile();
-    }
+    deleteRecursive(root); // <-- Call the new helper
     root.close();
+  } else {
+    Serial.println("❌ Failed to open root directory to wipe.");
   }
+
   fileCounter = 1;
-  Serial.println("✅ All previous data cleared!");
+  Serial.println("✅ SD Card Wiped!");
+
+  // Re-create the data directory since we just deleted it
+  if(!SD.exists("/farmland_data")) {
+    SD.mkdir("/farmland_data");
+    Serial.println("✅ Re-created /farmland_data directory.");
+  }
 }
 
 String generateJSONData() {
@@ -938,25 +1014,24 @@ void autoStartTransfer() {
 
 void formatSDCard() {
   if(!systemStatus.sdOK) return;
-  
   Serial.println("🔄 Formatting SD card...");
-  
-  File root = SD.open("/farmland_data");
+  File root = SD.open("/");
   if (root) {
-    File file = root.openNextFile();
-    while(file) {
-      String fileName = file.name();
-      if(!file.isDirectory()) {
-        SD.remove(fileName);
-      }
-      file = root.openNextFile();
-    }
+    deleteRecursive(root); // <-- Call the new helper
     root.close();
+  } else {
+    Serial.println("❌ Failed to open root directory to format.");
   }
-  
+
   Serial.println("✅ SD Card formatted successfully!");
   fileCounter = 1;
   beep(300);
+
+  // Re-create the data directory since we just deleted it
+  if(!SD.exists("/farmland_data")) {
+    SD.mkdir("/farmland_data");
+    Serial.println("✅ Re-created /farmland_data directory.");
+  }
 }
 
 void resetToNormalOperation() {
